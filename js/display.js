@@ -1,8 +1,8 @@
 (function () {
   "use strict";
-  const DEFAULT_MATCH = { blueName:"ทีมสีน้ำเงิน", redName:"ทีมสีแดง", blueScore:0, redScore:0, durationMs:300000, remainingMs:300000, running:false, startTs:null, phase:"idle", countdownValue:null, scoresVisible:true };
+  const DEFAULT_MATCH = { blueName:"ทีมสีน้ำเงิน", redName:"ทีมสีแดง", blueScore:0, redScore:0, durationMs:300000, remainingMs:300000, running:false, startTs:null, endTs:null, phase:"idle", countdownValue:null, countdownEndTs:null, scoresVisible:true };
   const $ = (id) => document.getElementById(id);
-  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, lastPhase = "idle";
+  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, countdownDriver = null, lastPhase = "idle", serverOffsetMs = 0, timerFinished = false;
 
   const queryRoom = new URLSearchParams(location.search).get("room") || "";
   $("displayRoomCode").value = queryRoom.replace(/\D/g, "").slice(0, 4);
@@ -22,6 +22,7 @@
       $("displayStatus").classList.toggle("online", online);
       $("displayStatus").textContent = (online ? "●" : "◌") + " ROOM " + roomCode;
     });
+    db.ref(".info/serverTimeOffset").on("value", (snapshot) => { serverOffsetMs = Number(snapshot.val()) || 0; });
     roomRef.on("value", (snapshot) => {
       if (!snapshot.exists()) return;
       state = Object.assign({}, DEFAULT_MATCH, snapshot.val() || {});
@@ -29,7 +30,8 @@
     }, (error) => console.error(error));
   }
 
-  function liveRemaining(match) { return !match.running || !match.startTs ? Math.max(0, Number(match.remainingMs)||0) : Math.max(0, (Number(match.remainingMs)||0) - (Date.now() - match.startTs)); }
+  function nowMs() { return Date.now() + serverOffsetMs; }
+  function liveRemaining(match) { if(!match.running)return Math.max(0,Number(match.remainingMs)||0); if(Number(match.endTs)>0)return Math.max(0,Number(match.endTs)-nowMs()); return !match.startTs?Math.max(0,Number(match.remainingMs)||0):Math.max(0,(Number(match.remainingMs)||0)-(nowMs()-match.startTs)); }
   function formatClock(ms) { const safe=Math.max(0,ms), whole=Math.floor(safe/1000), min=String(Math.floor(whole/60)).padStart(2,"0"), sec=String(whole%60).padStart(2,"0"), milli=String(Math.floor(safe%1000)).padStart(3,"0"); return min+":"+sec+'<span class="clock-ms">.'+milli+"</span>"; }
   function phaseLabel(phase) { return phase==="countdown"?"เตรียมเริ่มการแข่งขัน":phase==="running"?"กำลังแข่งขัน":phase==="paused"?"หยุดเวลา":phase==="finished"?"จบการแข่งขัน":"พร้อมเริ่ม"; }
 
@@ -53,12 +55,17 @@
     const blueWinner = state.phase === "finished" && state.blueScore > state.redScore;
     const redWinner = state.phase === "finished" && state.redScore > state.blueScore;
     winner("blueTeamBox", blueWinner); winner("redTeamBox", redWinner);
+    if(state.phase==="countdown")startCountdownDriver();else stopCountdownDriver();
     restartClock();
   }
 
   function setScore(id, value) { const el=$(id); if(el.textContent===String(value)) return; el.textContent=value; el.classList.add("bump"); setTimeout(()=>el.classList.remove("bump"),180); }
   function winner(id, active) { const box=$(id); box.classList.toggle("winner",active); box.querySelector(".winner-label").hidden=!active; }
-  function restartClock() { if(clockFrame) cancelAnimationFrame(clockFrame); const tick=()=>{ const remaining=liveRemaining(state); $("displayClock").innerHTML=formatClock(remaining); $("displayTimerBox").classList.toggle("danger",remaining>0&&remaining<=10000); if(state.running) clockFrame=requestAnimationFrame(tick); }; tick(); }
+  function restartClock() { if(clockFrame) cancelAnimationFrame(clockFrame); timerFinished=false; const tick=()=>{ const remaining=liveRemaining(state); $("displayClock").innerHTML=formatClock(remaining); $("displayTimerBox").classList.toggle("danger",remaining>0&&remaining<=10000); if(state.running&&remaining<=0&&!timerFinished){timerFinished=true;finishTimer();return;} if(state.running) clockFrame=requestAnimationFrame(tick); }; tick(); }
+  function startCountdownDriver(){if(countdownDriver||!state.countdownEndTs)return;const tick=()=>{const value=Math.max(0,Math.ceil((Number(state.countdownEndTs)-nowMs())/1000));$("countdownNumber").textContent=value>0?value:"GO!";if(value<=0){stopCountdownDriver();completeCountdown();}};countdownDriver=setInterval(tick,100);tick();}
+  function stopCountdownDriver(){if(countdownDriver)clearInterval(countdownDriver);countdownDriver=null;}
+  function completeCountdown(){if(!roomRef)return;const transitionNow=nowMs();roomRef.transaction((current)=>{if(!current||current.phase!=="countdown"||Number(current.countdownEndTs)>transitionNow)return;const remaining=Math.max(0,Number(current.remainingMs)||Number(current.durationMs)||0);current.phase=remaining>0?"running":"finished";current.running=remaining>0;current.startTs=remaining>0?transitionNow:null;current.endTs=remaining>0?transitionNow+remaining:null;current.countdownValue=0;current.countdownEndTs=null;current.updatedAt=transitionNow;return current;},(error)=>{if(error)console.error(error);},false);}
+  function finishTimer(){if(!roomRef)return;roomRef.transaction((current)=>{if(!current||!current.running)return;if(Number(current.endTs)>nowMs())return;current.running=false;current.remainingMs=0;current.startTs=null;current.endTs=null;current.phase="finished";current.updatedAt=nowMs();return current;},(error)=>{if(error)console.error(error);},false);}
   function playAudio(id) { const audio=$(id); if(!audio)return; audio.pause(); audio.currentTime=0; audio.play().catch(()=>{}); }
 
   $("displayRoomCode").addEventListener("input",()=>{$("displayRoomCode").value=$("displayRoomCode").value.replace(/\D/g,"").slice(0,4);});

@@ -6,7 +6,7 @@
     blueName: "ทีมสีน้ำเงิน", redName: "ทีมสีแดง",
     blueScore: 0, redScore: 0,
     durationMs: DEFAULT_DURATION, remainingMs: DEFAULT_DURATION,
-    running: false, startTs: null, phase: "idle",
+    running: false, startTs: null, endTs: null, phase: "idle",
     countdownValue: null, countdownEndTs: null,
     scoresVisible: true, updatedAt: 0
   };
@@ -20,6 +20,7 @@
   let timerFinished = false;
   let nameTimer = null;
   let toastTimer = null;
+  let serverOffsetMs = 0;
 
   const $ = (id) => document.getElementById(id);
 
@@ -47,10 +48,13 @@
       $("syncState").classList.toggle("online", online);
       $("syncText").textContent = online ? "เชื่อมต่อแล้ว" : "กำลังเชื่อมต่อ";
     });
+    db.ref(".info/serverTimeOffset").on("value", (snapshot) => {
+      serverOffsetMs = Number(snapshot.val()) || 0;
+    });
 
     roomRef.on("value", (snapshot) => {
       if (!snapshot.exists()) {
-        roomRef.set(Object.assign({}, DEFAULT_MATCH, { updatedAt: Date.now() })).catch(firebaseError);
+        roomRef.set(Object.assign({}, DEFAULT_MATCH, { updatedAt: nowMs() })).catch(firebaseError);
         return;
       }
       state = Object.assign({}, DEFAULT_MATCH, snapshot.val() || {});
@@ -67,12 +71,16 @@
 
   function updateMatch(patch) {
     if (!roomRef) return Promise.resolve();
-    return roomRef.update(Object.assign({}, patch, { updatedAt: Date.now() })).catch(firebaseError);
+    return roomRef.update(Object.assign({}, patch, { updatedAt: nowMs() })).catch(firebaseError);
   }
 
+  function nowMs() { return Date.now() + serverOffsetMs; }
+
   function liveRemaining(match) {
-    if (!match.running || !match.startTs) return Math.max(0, Number(match.remainingMs) || 0);
-    return Math.max(0, (Number(match.remainingMs) || 0) - (Date.now() - match.startTs));
+    if (!match.running) return Math.max(0, Number(match.remainingMs) || 0);
+    if (Number(match.endTs) > 0) return Math.max(0, Number(match.endTs) - nowMs());
+    if (!match.startTs) return Math.max(0, Number(match.remainingMs) || 0);
+    return Math.max(0, (Number(match.remainingMs) || 0) - (nowMs() - match.startTs));
   }
 
   function formatClock(ms) {
@@ -130,7 +138,7 @@
       $("controlClockBox").classList.toggle("danger", remaining > 0 && remaining <= 10000);
       if (state.running && remaining <= 0 && !timerFinished) {
         timerFinished = true;
-        updateMatch({ running: false, remainingMs: 0, startTs: null, phase: "finished" });
+        updateMatch({ running: false, remainingMs: 0, startTs: null, endTs: null, phase: "finished" });
         return;
       }
       if (state.running) clockFrame = requestAnimationFrame(tick);
@@ -141,19 +149,40 @@
   function startCountdownDriver() {
     if (countdownDriver || !state.countdownEndTs) return;
     const tick = () => {
-      const value = Math.max(0, Math.ceil((state.countdownEndTs - Date.now()) / 1000));
+      const value = Math.max(0, Math.ceil((Number(state.countdownEndTs) - nowMs()) / 1000));
+      $("countdownMini").textContent = value > 0 ? value : "GO!";
       if (value > 0) {
         if (value !== state.countdownValue) updateMatch({ countdownValue: value });
         return;
       }
       stopCountdownDriver();
-      updateMatch({ phase: "running", running: true, startTs: Date.now(), countdownValue: 0, countdownEndTs: null });
-      playAudio("whistleAudio");
+      completeCountdown();
     };
     // กำหนด interval ก่อนเรียก tick เพื่อให้หยุดตัวเองได้ แม้แท็บถูกพักไว้
     // จนเวลานับถอยหลังหมดแล้วค่อยกลับมาทำงาน
     countdownDriver = setInterval(tick, 100);
     tick();
+  }
+
+  function completeCountdown() {
+    if (!roomRef) return;
+    const transitionNow = nowMs();
+    roomRef.transaction((current) => {
+      if (!current || current.phase !== "countdown") return;
+      if (Number(current.countdownEndTs) > transitionNow) return;
+      const remaining = Math.max(0, Number(current.remainingMs) || Number(current.durationMs) || 0);
+      current.phase = remaining > 0 ? "running" : "finished";
+      current.running = remaining > 0;
+      current.startTs = remaining > 0 ? transitionNow : null;
+      current.endTs = remaining > 0 ? transitionNow + remaining : null;
+      current.countdownValue = 0;
+      current.countdownEndTs = null;
+      current.updatedAt = transitionNow;
+      return current;
+    }, (error, committed) => {
+      if (error) return firebaseError(error);
+      if (committed) playAudio("whistleAudio");
+    }, false);
   }
 
   function stopCountdownDriver() {
@@ -165,30 +194,38 @@
     const remaining = liveRemaining(state);
     if (remaining <= 0) return toast("กรุณารีเซ็ตเวลาก่อนเริ่มแข่งขัน");
     playAudio("countdownAudio");
-    updateMatch({ phase: "countdown", running: false, remainingMs: remaining, startTs: null, countdownValue: 3, countdownEndTs: Date.now() + 3200 });
+    updateMatch({ phase: "countdown", running: false, remainingMs: remaining, startTs: null, endTs: null, countdownValue: 3, countdownEndTs: nowMs() + 3000 });
   }
 
   function pauseMatch() {
-    updateMatch({ phase: "paused", running: false, remainingMs: liveRemaining(state), startTs: null, countdownValue: null, countdownEndTs: null });
+    updateMatch({ phase: "paused", running: false, remainingMs: liveRemaining(state), startTs: null, endTs: null, countdownValue: null, countdownEndTs: null });
   }
 
   function resumeMatch() {
-    updateMatch({ phase: "running", running: true, remainingMs: state.remainingMs, startTs: Date.now(), countdownValue: null, countdownEndTs: null });
+    const remaining = Math.max(0, Number(state.remainingMs) || 0);
+    const resumeNow = nowMs();
+    updateMatch({ phase: remaining > 0 ? "running" : "finished", running: remaining > 0, remainingMs: remaining, startTs: remaining > 0 ? resumeNow : null, endTs: remaining > 0 ? resumeNow + remaining : null, countdownValue: null, countdownEndTs: null });
   }
 
   function finishMatch() {
-    updateMatch({ phase: "finished", running: false, remainingMs: liveRemaining(state), startTs: null, countdownValue: null, countdownEndTs: null });
+    updateMatch({ phase: "finished", running: false, remainingMs: liveRemaining(state), startTs: null, endTs: null, countdownValue: null, countdownEndTs: null });
   }
 
   function resetTimer() {
-    updateMatch({ phase: "idle", running: false, remainingMs: state.durationMs, startTs: null, countdownValue: null, countdownEndTs: null }).then(() => toast("รีเซ็ตเวลาแล้ว"));
+    stopCountdownDriver();
+    updateMatch({ phase: "idle", running: false, remainingMs: state.durationMs, startTs: null, endTs: null, countdownValue: null, countdownEndTs: null }).then(() => toast("รีเซ็ตเวลาแล้ว"));
   }
 
   function applyDuration() {
-    const minutes = Math.max(0, Number($("durationMinutes").value) || 0);
-    const seconds = Math.min(59, Math.max(0, Number($("durationSeconds").value) || 0));
-    const duration = Math.max(1000, (minutes * 60 + seconds) * 1000);
-    updateMatch({ durationMs: duration, remainingMs: duration, running: false, startTs: null, phase: "idle", countdownValue: null, countdownEndTs: null }).then(() => toast("ตั้งเวลาแข่งขันเรียบร้อย"));
+    const minutes = Math.max(0, Math.floor(Number($("durationMinutes").value) || 0));
+    const seconds = Math.max(0, Math.floor(Number($("durationSeconds").value) || 0));
+    const totalSeconds = minutes * 60 + seconds;
+    if (totalSeconds <= 0) return toast("กรุณาตั้งเวลาอย่างน้อย 1 วินาที");
+    const duration = totalSeconds * 1000;
+    $("durationMinutes").value = Math.floor(totalSeconds / 60);
+    $("durationSeconds").value = totalSeconds % 60;
+    stopCountdownDriver();
+    updateMatch({ durationMs: duration, remainingMs: duration, running: false, startTs: null, endTs: null, phase: "idle", countdownValue: null, countdownEndTs: null }).then(() => toast("ตั้งเวลาแข่งขันเรียบร้อย"));
   }
 
   function adjustScore(side, amount) {
@@ -206,7 +243,7 @@
     roomRef.set(Object.assign({}, DEFAULT_MATCH, {
       blueName: state.blueName, redName: state.redName,
       durationMs: state.durationMs, remainingMs: state.durationMs,
-      updatedAt: Date.now()
+      updatedAt: nowMs()
     })).then(() => toast("พร้อมสำหรับแมตช์ใหม่")).catch(firebaseError);
   }
 
