@@ -3,7 +3,10 @@
     "rooms": {
       "$room": {
         ".read": true,
-        ".write": true
+        ".write": true,
+        "history": {
+          ".indexOn": ["endedAt"]
+        }
       }
     }
   }

@@ -1,6 +1,7 @@
 (function () {
   "use strict";
 
+  const ROOM_PASSWORD = "2877";
   const DEFAULT_DURATION = 5 * 60 * 1000;
   const DEFAULT_MATCH = {
     blueName: "ทีมสีน้ำเงิน", redName: "ทีมสีแดง",
@@ -8,19 +9,24 @@
     durationMs: DEFAULT_DURATION, remainingMs: DEFAULT_DURATION,
     running: false, startTs: null, endTs: null, phase: "idle",
     countdownValue: null, countdownEndTs: null,
-    scoresVisible: true, updatedAt: 0
+    scoresVisible: true, matchId: null, historyEntryId: null, startedAt: null, finishReason: null,
+    historySaved: false,
+    updatedAt: 0
   };
 
   let db = null;
   let roomRef = null;
+  let historyRef = null;
   let roomCode = "";
   let state = Object.assign({}, DEFAULT_MATCH);
   let clockFrame = null;
+  let timeUpPending = false;
+  let finishingMatch = false;
   let countdownDriver = null;
-  let timerFinished = false;
   let nameTimer = null;
   let toastTimer = null;
   let serverOffsetMs = 0;
+  let historyRefreshSerial = 0;
 
   const $ = (id) => document.getElementById(id);
 
@@ -31,14 +37,17 @@
 
   function validRoom(value) { return /^\d{4}$/.test(value); }
   function cleanRoomInput() { $("roomCode").value = $("roomCode").value.replace(/\D/g, "").slice(0, 4); }
+  function cleanPasswordInput() { $("roomPassword").value = $("roomPassword").value.replace(/\D/g, "").slice(0, 4); }
 
   function joinRoom() {
     cleanRoomInput();
     const code = $("roomCode").value.trim();
     if (!validRoom(code)) return toast("กรุณากรอกรหัสสนามเป็นตัวเลข 4 หลัก");
+    if ($("roomPassword").value !== ROOM_PASSWORD) return toast("รหัสผ่านห้องไม่ถูกต้อง");
     roomCode = code;
     initFirebase();
     roomRef = db.ref("rooms/" + roomCode + "/match");
+    historyRef = db.ref("rooms/" + roomCode + "/history");
     $("roomGate").hidden = true;
     $("controlApp").hidden = false;
     $("roomPill").textContent = "ROOM " + roomCode + "  ▢";
@@ -60,6 +69,7 @@
       state = Object.assign({}, DEFAULT_MATCH, snapshot.val() || {});
       renderState();
     }, firebaseError);
+    historyRef.on("value", refreshHistoryFromServer, firebaseError);
   }
 
   function firebaseError(error) {
@@ -77,10 +87,10 @@
   function nowMs() { return Date.now() + serverOffsetMs; }
 
   function liveRemaining(match) {
-    if (!match.running) return Math.max(0, Number(match.remainingMs) || 0);
-    if (Number(match.endTs) > 0) return Math.max(0, Number(match.endTs) - nowMs());
-    if (!match.startTs) return Math.max(0, Number(match.remainingMs) || 0);
-    return Math.max(0, (Number(match.remainingMs) || 0) - (nowMs() - match.startTs));
+    if (!match.running) return Number(match.remainingMs) || 0;
+    if (match.endTs != null && Number.isFinite(Number(match.endTs))) return Number(match.endTs) - nowMs();
+    if (!match.startTs) return Number(match.remainingMs) || 0;
+    return (Number(match.remainingMs) || 0) - (nowMs() - match.startTs);
   }
 
   function formatClock(ms) {
@@ -89,12 +99,28 @@
     const min = String(Math.floor(whole / 60)).padStart(2, "0");
     const sec = String(whole % 60).padStart(2, "0");
     const milli = String(Math.floor(safe % 1000)).padStart(3, "0");
-    return min + ":" + sec + '<span class="clock-ms">.' + milli + "</span>";
+    return '<span class="clock-main">' + min + ":" + sec + '</span><span class="clock-ms">.' + milli + "</span>";
+  }
+
+  function paintClock(element, ms) {
+    const safe = Math.max(0, ms);
+    const whole = Math.floor(safe / 1000);
+    const main = String(Math.floor(whole / 60)).padStart(2, "0") + ":" + String(whole % 60).padStart(2, "0");
+    const milli = "." + String(Math.floor(safe % 1000)).padStart(3, "0");
+    const mainElement = element.querySelector(".clock-main");
+    const milliElement = element.querySelector(".clock-ms");
+    if (!mainElement || !milliElement) {
+      element.innerHTML = formatClock(ms);
+      return;
+    }
+    if (mainElement.textContent !== main) mainElement.textContent = main;
+    if (milliElement.textContent !== milli) milliElement.textContent = milli;
   }
 
   function phaseLabel(phase) {
     return phase === "countdown" ? "เตรียมเริ่มการแข่งขัน" :
       phase === "running" ? "กำลังแข่งขัน" :
+      phase === "timeup" ? "หมดเวลา · รอกรรมการจบแมตช์" :
       phase === "paused" ? "หยุดเวลา" :
       phase === "finished" ? "จบการแข่งขัน" : "พร้อมเริ่ม";
   }
@@ -121,7 +147,7 @@
     $("resumeMatch").hidden = phase !== "paused";
     $("countdownState").hidden = phase !== "countdown";
     $("countdownMini").textContent = state.countdownValue || 3;
-    $("finishMatch").disabled = phase === "idle" || phase === "finished";
+    $("finishMatch").disabled = finishingMatch || phase === "idle" || phase === "finished";
 
     if (phase === "countdown") startCountdownDriver(); else stopCountdownDriver();
     restartClock();
@@ -129,21 +155,39 @@
 
   function restartClock() {
     if (clockFrame) cancelAnimationFrame(clockFrame);
-    timerFinished = false;
+    clockFrame = null;
+    timeUpPending = false;
     const tick = () => {
       const remaining = liveRemaining(state);
-      const html = formatClock(remaining);
-      $("controlClock").innerHTML = html;
-      $("previewClock").innerHTML = '<span class="clock">' + html + "</span>";
+      paintClock($("controlClock"), remaining);
+      paintClock($("previewClock").querySelector(".clock"), remaining);
       $("controlClockBox").classList.toggle("danger", remaining > 0 && remaining <= 10000);
-      if (state.running && remaining <= 0 && !timerFinished) {
-        timerFinished = true;
-        updateMatch({ running: false, remainingMs: 0, startTs: null, endTs: null, phase: "finished" });
+      if (state.running && remaining <= 0 && !timeUpPending) {
+        timeUpPending = true;
+        markTimeUp();
         return;
       }
-      if (state.running) clockFrame = requestAnimationFrame(tick);
+      if (state.running) {
+        clockFrame = requestAnimationFrame(tick);
+      }
     };
     tick();
+  }
+
+  function markTimeUp() {
+    if (!roomRef) return;
+    const transitionNow = nowMs();
+    roomRef.transaction((current) => {
+      if (!current || !current.running) return;
+      if (current.endTs != null && Number(current.endTs) > transitionNow) return;
+      current.running = false;
+      current.remainingMs = 0;
+      current.startTs = null;
+      current.endTs = null;
+      current.phase = "timeup";
+      current.updatedAt = transitionNow;
+      return current;
+    }, (error) => { if (error) firebaseError(error); }, false);
   }
 
   function startCountdownDriver() {
@@ -193,8 +237,11 @@
   function startMatch() {
     const remaining = liveRemaining(state);
     if (remaining <= 0) return toast("กรุณารีเซ็ตเวลาก่อนเริ่มแข่งขัน");
+    const startedAt = nowMs();
+    const newMatchId = historyRef ? historyRef.push().key : null;
+    if (!newMatchId) return toast("ไม่สามารถสร้างรหัสแมตช์ได้ กรุณาตรวจสอบการเชื่อมต่อ");
     playAudio("countdownAudio");
-    updateMatch({ phase: "countdown", running: false, remainingMs: remaining, startTs: null, endTs: null, countdownValue: 3, countdownEndTs: nowMs() + 3000 });
+    updateMatch({ phase: "countdown", running: false, remainingMs: remaining, startTs: null, endTs: null, countdownValue: 3, countdownEndTs: startedAt + 3000, matchId: newMatchId, historyEntryId: null, startedAt: startedAt, finishReason: null, historySaved: false });
   }
 
   function pauseMatch() {
@@ -202,18 +249,61 @@
   }
 
   function resumeMatch() {
-    const remaining = Math.max(0, Number(state.remainingMs) || 0);
+    const remaining = Number(state.remainingMs) || 0;
     const resumeNow = nowMs();
-    updateMatch({ phase: remaining > 0 ? "running" : "finished", running: remaining > 0, remainingMs: remaining, startTs: remaining > 0 ? resumeNow : null, endTs: remaining > 0 ? resumeNow + remaining : null, countdownValue: null, countdownEndTs: null });
+    updateMatch({ phase: "running", running: true, remainingMs: remaining, startTs: resumeNow, endTs: resumeNow + remaining, countdownValue: null, countdownEndTs: null });
   }
 
   function finishMatch() {
-    updateMatch({ phase: "finished", running: false, remainingMs: liveRemaining(state), startTs: null, endTs: null, countdownValue: null, countdownEndTs: null });
+    if (!db || !roomCode || !roomRef || !historyRef || finishingMatch) return;
+    finishingMatch = true;
+    $("finishMatch").disabled = true;
+    const endedAt = nowMs();
+    roomRef.once("value").then((snapshot) => {
+      if (!snapshot.exists()) throw new Error("MATCH_NOT_FOUND");
+      const currentMatch = Object.assign({}, DEFAULT_MATCH, snapshot.val() || {});
+      if (currentMatch.phase === "idle") throw new Error("MATCH_NOT_STARTED");
+      const matchId = String(currentMatch.matchId || historyRef.push().key || "");
+      const historyId = String(currentMatch.historyEntryId || historyRef.push().key || "");
+      if (!matchId || !historyId) throw new Error("MATCH_ID_UNAVAILABLE");
+      const finishedMatch = Object.assign({}, currentMatch, {
+        matchId: matchId,
+        historyEntryId: historyId,
+        phase: "finished",
+        running: false,
+        remainingMs: Math.max(0, liveRemaining(currentMatch)),
+        startTs: null,
+        endTs: null,
+        countdownValue: null,
+        countdownEndTs: null,
+        finishReason: "manual",
+        historySaved: true,
+        updatedAt: endedAt
+      });
+      const record = buildHistoryRecord(finishedMatch, historyId, endedAt);
+      const updates = {};
+      updates["rooms/" + roomCode + "/match"] = finishedMatch;
+      updates["rooms/" + roomCode + "/history/" + historyId] = record;
+      return db.ref().update(updates).then(() => verifyHistoryRecord(historyId));
+    }).then(() => {
+      finishingMatch = false;
+      toast("จบการแข่งขันและบันทึกประวัติแล้ว");
+    }).catch((error) => {
+      finishingMatch = false;
+      if (error && /MATCH_NOT_FOUND|MATCH_NOT_STARTED|MATCH_ID_UNAVAILABLE/.test(error.message || "")) {
+        toast("ไม่พบข้อมูลแมตช์ที่กำลังแข่งขัน กรุณาลองเริ่มแมตช์ใหม่");
+      } else if (error && /HISTORY_NOT_PERSISTED|HISTORY_SERVER_READ_FAILED/.test(error.message || "")) {
+        toast("Firebase ยังไม่เก็บประวัติ กรุณา Publish firebase-rules.json เวอร์ชันล่าสุด");
+      } else {
+        firebaseError(error);
+      }
+      renderState();
+    });
   }
 
   function resetTimer() {
     stopCountdownDriver();
-    updateMatch({ phase: "idle", running: false, remainingMs: state.durationMs, startTs: null, endTs: null, countdownValue: null, countdownEndTs: null }).then(() => toast("รีเซ็ตเวลาแล้ว"));
+    updateMatch({ phase: "idle", running: false, remainingMs: state.durationMs, startTs: null, endTs: null, countdownValue: null, countdownEndTs: null, matchId: null, historyEntryId: null, startedAt: null, finishReason: null, historySaved: false }).then(() => toast("รีเซ็ตเวลาแล้ว"));
   }
 
   function applyDuration() {
@@ -225,7 +315,111 @@
     $("durationMinutes").value = Math.floor(totalSeconds / 60);
     $("durationSeconds").value = totalSeconds % 60;
     stopCountdownDriver();
-    updateMatch({ durationMs: duration, remainingMs: duration, running: false, startTs: null, endTs: null, phase: "idle", countdownValue: null, countdownEndTs: null }).then(() => toast("ตั้งเวลาแข่งขันเรียบร้อย"));
+    updateMatch({ durationMs: duration, remainingMs: duration, running: false, startTs: null, endTs: null, phase: "idle", countdownValue: null, countdownEndTs: null, matchId: null, historyEntryId: null, startedAt: null, finishReason: null, historySaved: false }).then(() => toast("ตั้งเวลาแข่งขันเรียบร้อย"));
+  }
+
+  function buildHistoryRecord(match, historyId, endedAt) {
+    const durationMs = Math.max(0, Number(match.durationMs) || 0);
+    const remainingMs = Math.max(0, Number(match.remainingMs) || 0);
+    return {
+      historyId: historyId,
+      matchId: String(match.matchId || historyId),
+      blueName: match.blueName || "ทีมสีน้ำเงิน",
+      redName: match.redName || "ทีมสีแดง",
+      blueScore: Number(match.blueScore) || 0,
+      redScore: Number(match.redScore) || 0,
+      durationMs: durationMs,
+      playedMs: Math.max(0, durationMs - remainingMs),
+      startedAt: Number(match.startedAt) || null,
+      endedAt: endedAt,
+      finishReason: "manual"
+    };
+  }
+
+  function historyRestUrl(childKey) {
+    const base = String(window.EK_FIREBASE_CONFIG.databaseURL || "").replace(/\/$/, "");
+    const child = childKey ? "/" + encodeURIComponent(childKey) : "";
+    return base + "/rooms/" + encodeURIComponent(roomCode) + "/history" + child + ".json?cacheBust=" + Date.now();
+  }
+
+  function recordsFromSnapshot(snapshot) {
+    const records = [];
+    snapshot.forEach((child) => records.push({ key: child.key, value: child.val() || {} }));
+    return records;
+  }
+
+  function recordsFromServerObject(data) {
+    if (!data || typeof data !== "object") return [];
+    return Object.keys(data).map((key) => ({ key: key, value: data[key] || {} }));
+  }
+
+  function fetchServerJson(url) {
+    return fetch(url, { cache: "no-store", headers: { "Accept": "application/json" } }).then((response) => {
+      if (!response.ok) throw new Error("HISTORY_SERVER_READ_FAILED_" + response.status);
+      return response.json();
+    });
+  }
+
+  function verifyHistoryRecord(historyId) {
+    return fetchServerJson(historyRestUrl(historyId)).then((record) => {
+      if (!record || typeof record !== "object") throw new Error("HISTORY_NOT_PERSISTED");
+      return record;
+    });
+  }
+
+  function refreshHistoryFromServer(snapshot) {
+    const requestSerial = ++historyRefreshSerial;
+    const fallbackRecords = recordsFromSnapshot(snapshot);
+    fetchServerJson(historyRestUrl()).then((data) => {
+      if (requestSerial !== historyRefreshSerial) return;
+      renderHistoryRecords(recordsFromServerObject(data));
+    }).catch((error) => {
+      if (requestSerial !== historyRefreshSerial) return;
+      console.warn("อ่านประวัติจาก server โดยตรงไม่สำเร็จ ใช้ snapshot แทน", error);
+      renderHistoryRecords(fallbackRecords);
+    });
+  }
+
+  function renderHistoryRecords(records) {
+    records.sort((a, b) => {
+      const byTime = (Number(b.value.endedAt) || 0) - (Number(a.value.endedAt) || 0);
+      return byTime || String(b.key).localeCompare(String(a.key));
+    });
+    if (!records.length) {
+      $("historyList").innerHTML = '<p class="history-empty">ยังไม่มีประวัติการแข่งขัน</p>';
+      if ($("historyCount")) $("historyCount").textContent = "0 รายการ";
+      $("clearHistory").disabled = true;
+      return;
+    }
+    if ($("historyCount")) $("historyCount").textContent = records.length + " รายการ";
+    $("clearHistory").disabled = false;
+    $("historyList").innerHTML = records.map(({ key, value }) => {
+      const endedAt = Number(value.endedAt) || 0;
+      const date = endedAt ? new Date(endedAt).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : "ไม่ระบุเวลา";
+      const played = formatHistoryDuration(Number(value.playedMs) || Number(value.durationMs) || 0);
+      const blueName = escapeHtml(value.blueName || "ทีมสีน้ำเงิน");
+      const redName = escapeHtml(value.redName || "ทีมสีแดง");
+      return '<article class="history-item"><div class="history-meta"><span>' + date + '</span><small>' + (value.finishReason === "time" ? "หมดเวลา" : "จบโดยกรรมการ") + ' · ใช้เวลา ' + played + '</small></div><div class="history-result"><span class="history-team blue">' + blueName + '</span><strong>' + (Number(value.blueScore) || 0) + '<i>–</i>' + (Number(value.redScore) || 0) + '</strong><span class="history-team red">' + redName + '</span></div><button class="history-delete" data-history-delete="' + escapeHtml(key) + '" aria-label="ลบประวัติแมตช์นี้">ลบ</button></article>';
+    }).join("");
+  }
+
+  function formatHistoryDuration(ms) {
+    const total = Math.max(0, Math.round(ms / 1000));
+    return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0");
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+  }
+
+  function deleteHistory(key) {
+    if (!historyRef || !key || !confirm("ลบประวัติแมตช์นี้ใช่หรือไม่?")) return;
+    historyRef.child(key).remove().then(() => toast("ลบประวัติแล้ว")).catch(firebaseError);
+  }
+
+  function clearHistory() {
+    if (!historyRef || !confirm("ล้างประวัติการแข่งขันทั้งหมดของห้องนี้ใช่หรือไม่?")) return;
+    historyRef.remove().then(() => toast("ล้างประวัติทั้งหมดแล้ว")).catch(firebaseError);
   }
 
   function adjustScore(side, amount) {
@@ -258,6 +452,8 @@
 
   $("roomCode").addEventListener("input", cleanRoomInput);
   $("roomCode").addEventListener("keydown", (event) => { if (event.key === "Enter") joinRoom(); });
+  $("roomPassword").addEventListener("input", cleanPasswordInput);
+  $("roomPassword").addEventListener("keydown", (event) => { if (event.key === "Enter") joinRoom(); });
   $("randomRoom").addEventListener("click", () => { $("roomCode").value = String(Math.floor(1000 + Math.random() * 9000)); });
   $("joinRoom").addEventListener("click", joinRoom);
   $("openDisplayGate").addEventListener("click", openDisplay);
@@ -272,11 +468,16 @@
   $("resetTimer").addEventListener("click", resetTimer);
   $("applyDuration").addEventListener("click", applyDuration);
   $("newMatch").addEventListener("click", newMatch);
+  $("clearHistory").addEventListener("click", clearHistory);
+  $("historyList").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-history-delete]");
+    if (button) deleteHistory(button.dataset.historyDelete);
+  });
   $("scoresVisible").addEventListener("change", (event) => updateMatch({ scoresVisible: event.target.checked }));
   $("blueName").addEventListener("input", saveTeamNames);
   $("redName").addEventListener("input", saveTeamNames);
   document.querySelectorAll("[data-score]").forEach((button) => button.addEventListener("click", () => adjustScore(button.dataset.score, Number(button.dataset.value))));
-  $("assetToggle").addEventListener("click", () => { $("assetInfo").hidden = !$("assetInfo").hidden; $("assetArrow").textContent = $("assetInfo").hidden ? "⌄" : "⌃"; });
+  $("assetToggle").addEventListener("click", () => { $("assetInfo").hidden = !$("assetInfo").hidden; $("assetArrow").textContent = $("assetInfo").hidden ? "แสดง" : "ซ่อน"; });
   $("testCountdown").addEventListener("click", () => playAudio("countdownAudio"));
   $("testWhistle").addEventListener("click", () => playAudio("whistleAudio"));
 })();

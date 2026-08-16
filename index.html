@@ -9,13 +9,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=20260816-history4">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('ek-soccer-theme')||'light'}catch(_){}</script>
 </head>
 <body>
   <section id="roomGate" class="room-gate">
     <div class="room-card">
-      <div class="gate-mark">⚽</div>
+      <div class="gate-mark">RS</div>
       <p class="eyebrow-dark">EASYKIDS ROBOTICS</p>
       <h1>Robot Soccer</h1>
       <p class="gate-subtitle">ระบบจับเวลาและคะแนนการแข่งขันแบบเรียลไทม์</p>
@@ -24,6 +24,8 @@
         <input id="roomCode" value="2401" maxlength="4" inputmode="numeric" aria-label="รหัสสนาม 4 หลัก">
         <button id="randomRoom" class="button secondary compact">สุ่ม</button>
       </div>
+      <label class="field-label" for="roomPassword">รหัสผ่านห้อง / Room Password</label>
+      <input id="roomPassword" class="password-input" type="password" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="••••" aria-label="รหัสผ่านห้อง">
       <button id="joinRoom" class="button primary full">เข้าสู่หน้าควบคุม</button>
       <button id="openDisplayGate" class="button ghost full">เปิดหน้าจอแสดงผล</button>
     </div>
@@ -38,8 +40,8 @@
       <button id="roomPill" class="room-pill">ROOM ----</button>
       <div id="syncState" class="sync-state"><span class="sync-dot"></span><span id="syncText">กำลังเชื่อมต่อ</span></div>
       <div class="header-actions">
-        <button id="openDisplay" class="icon-button light" aria-label="เปิดจอ Display">↗</button>
-        <button id="themeToggle" class="icon-button light" aria-label="สลับธีม">◐</button>
+        <button id="openDisplay" class="header-text-button light" aria-label="เปิดจอ Display">DISPLAY</button>
+        <button id="themeToggle" class="header-text-button light" aria-label="สลับธีม">THEME</button>
       </div>
     </header>
 
@@ -47,25 +49,25 @@
       <section>
         <article class="panel timer-panel">
           <div class="panel-heading">
-            <div><span class="heading-icon">◷</span><div><h2>ตัวจับเวลา</h2><p>Match timer</p></div></div>
+            <div><span class="heading-icon">TM</span><div><h2>ตัวจับเวลา</h2><p>Match timer</p></div></div>
             <span id="phaseChip" class="phase-chip idle">พร้อมเริ่ม</span>
           </div>
           <div id="controlClockBox" class="control-clock">
-            <span id="controlClock" class="clock">05:00<span class="clock-ms">.000</span></span>
+            <span id="controlClock" class="clock"><span class="clock-main">05:00</span><span class="clock-ms">.000</span></span>
           </div>
           <div class="timer-actions">
-            <button id="startMatch" class="button success large">▶ นับ 3–2–1 แล้วเริ่ม</button>
-            <button id="pauseMatch" class="button warning large" hidden>Ⅱ หยุดเวลา</button>
-            <button id="resumeMatch" class="button success large" hidden>▶ เดินเวลาต่อ</button>
+            <button id="startMatch" class="button success large">นับ 3–2–1 แล้วเริ่ม</button>
+            <button id="pauseMatch" class="button warning large" hidden>หยุดเวลา</button>
+            <button id="resumeMatch" class="button success large" hidden>เดินเวลาต่อ</button>
             <button id="countdownState" class="button muted large" hidden disabled>กำลังนับถอยหลัง <b id="countdownMini">3</b></button>
-            <button id="finishMatch" class="button danger-outline" disabled>■ จบการแข่งขัน</button>
-            <button id="resetTimer" class="button ghost">↻ รีเซ็ตเวลา</button>
+            <button id="finishMatch" class="button danger-outline" disabled>จบการแข่งขัน</button>
+            <button id="resetTimer" class="button ghost">รีเซ็ตเวลา</button>
           </div>
         </article>
 
         <article class="panel score-control-panel">
           <div class="panel-heading">
-            <div><span class="heading-icon">♛</span><div><h2>ควบคุมคะแนน</h2><p>คะแนนขึ้นจอ Display ทันที</p></div></div>
+            <div><span class="heading-icon">SC</span><div><h2>ควบคุมคะแนน</h2><p>คะแนนขึ้นจอ Display ทันที</p></div></div>
             <span class="live-tag"><span></span> LIVE</span>
           </div>
           <div class="score-controls">
@@ -73,14 +75,14 @@
               <div class="team-color-line"></div>
               <input id="blueName" class="team-name-input" value="ทีมสีน้ำเงิน" maxlength="30" aria-label="ชื่อทีมสีน้ำเงิน">
               <div id="blueScore" class="score-number">0</div>
-              <div class="score-buttons"><button data-score="blue" data-value="-1" aria-label="ลดคะแนนทีมสีน้ำเงิน">−</button><button data-score="blue" data-value="1" aria-label="เพิ่มคะแนนทีมสีน้ำเงิน">＋</button></div>
+              <div class="score-buttons"><button data-score="blue" data-value="-1" aria-label="ลดคะแนนทีมสีน้ำเงิน">-</button><button data-score="blue" data-value="1" aria-label="เพิ่มคะแนนทีมสีน้ำเงิน">+</button></div>
             </div>
             <div class="versus">VS</div>
             <div class="team-score-card red">
               <div class="team-color-line"></div>
               <input id="redName" class="team-name-input" value="ทีมสีแดง" maxlength="30" aria-label="ชื่อทีมสีแดง">
               <div id="redScore" class="score-number">0</div>
-              <div class="score-buttons"><button data-score="red" data-value="-1" aria-label="ลดคะแนนทีมสีแดง">−</button><button data-score="red" data-value="1" aria-label="เพิ่มคะแนนทีมสีแดง">＋</button></div>
+              <div class="score-buttons"><button data-score="red" data-value="-1" aria-label="ลดคะแนนทีมสีแดง">-</button><button data-score="red" data-value="1" aria-label="เพิ่มคะแนนทีมสีแดง">+</button></div>
             </div>
           </div>
         </article>
@@ -88,25 +90,25 @@
 
       <aside>
         <article class="panel compact-panel">
-          <div class="panel-heading"><div><span class="heading-icon">☷</span><div><h2>ตั้งค่าการแข่งขัน</h2><p>Match settings</p></div></div></div>
+          <div class="panel-heading"><div><span class="heading-icon">ST</span><div><h2>ตั้งค่าการแข่งขัน</h2><p>Match settings</p></div></div></div>
           <div class="panel-content">
             <label class="field-label">ระยะเวลาแข่งขัน</label>
             <div class="duration-grid">
               <label><input id="durationMinutes" type="number" min="0" max="99" value="5"><span>นาที</span></label><b>:</b>
               <label><input id="durationSeconds" type="number" min="0" value="0"><span>วินาที</span></label>
             </div>
-            <button id="applyDuration" class="button primary full">✓ ใช้เวลานี้</button>
+            <button id="applyDuration" class="button primary full">ใช้เวลานี้</button>
             <label class="switch-row">
-              <span><span class="switch-icon">▣</span><span><strong>แสดงคะแนนบน Display</strong><small>ซ่อนหรือแสดงคะแนนทั้งสองทีม</small></span></span>
+              <span><span class="switch-icon">ON</span><span><strong>แสดงคะแนนบน Display</strong><small>ซ่อนหรือแสดงคะแนนทั้งสองทีม</small></span></span>
               <input id="scoresVisible" type="checkbox" checked>
             </label>
-            <button id="newMatch" class="button danger-soft full">↻ เริ่มแมตช์ใหม่และล้างคะแนน</button>
+            <button id="newMatch" class="button danger-soft full">เริ่มแมตช์ใหม่และล้างคะแนน</button>
           </div>
         </article>
 
         <article class="panel compact-panel">
           <button id="assetToggle" class="accordion-button">
-            <div class="panel-heading"><div><span class="heading-icon">♫</span><div><h2>เสียงและไฟล์โลโก้</h2><p>ใช้ชื่อและตำแหน่งเดิม</p></div></div><span id="assetArrow">⌄</span></div>
+            <div class="panel-heading"><div><span class="heading-icon">AU</span><div><h2>เสียงและไฟล์โลโก้</h2><p>ใช้ชื่อและตำแหน่งเดิม</p></div></div><span id="assetArrow">แสดง</span></div>
           </button>
           <div id="assetInfo" class="panel-content asset-info" hidden>
             <code>logos/logo-left.png</code><code>logos/logo-right.png</code>
@@ -116,13 +118,23 @@
         </article>
 
         <article class="display-preview">
-          <div class="preview-top"><span>LIVE DISPLAY</span><span>↗</span></div>
-          <div id="previewClock" class="preview-clock"><span class="clock">05:00<span class="clock-ms">.000</span></span></div>
+          <div class="preview-top"><span>LIVE DISPLAY</span><span>OPEN</span></div>
+          <div id="previewClock" class="preview-clock"><span class="clock"><span class="clock-main">05:00</span><span class="clock-ms">.000</span></span></div>
           <div class="preview-scores"><span id="previewBlue">0</span><b>–</b><span id="previewRed">0</span></div>
-          <button id="openDisplayPreview">เปิดแบบเต็มหน้าจอ ↗</button>
+          <button id="openDisplayPreview">เปิดแบบเต็มหน้าจอ</button>
         </article>
       </aside>
     </main>
+
+    <section class="history-wrap">
+      <article class="panel history-panel">
+        <div class="panel-heading">
+          <div><span class="heading-icon">HI</span><div><h2>ประวัติการแข่งขัน</h2><p>Match history · บันทึกอัตโนมัติเมื่อจบแมตช์</p></div></div>
+          <div class="history-heading-actions"><span id="historyCount" class="history-count">0 รายการ</span><button id="clearHistory" class="button danger-soft compact">ล้างประวัติทั้งหมด</button></div>
+        </div>
+        <div id="historyList" class="history-list"><p class="history-empty">ยังไม่มีประวัติการแข่งขัน</p></div>
+      </article>
+    </section>
   </div>
 
   <audio id="countdownAudio" src="sounds/countdown.mp3" preload="auto"></audio>
@@ -131,7 +143,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="js/firebase-config.js"></script>
-  <script src="js/control.js"></script>
+  <script src="js/firebase-config.js?v=20260816-history4"></script>
+  <script src="js/control.js?v=20260816-history4"></script>
 </body>
 </html>
