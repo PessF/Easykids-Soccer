@@ -1,12 +1,53 @@
 {
   "rules": {
+    ".read": false,
+    ".write": false,
     "rooms": {
       "$room": {
-        ".read": true,
-        ".write": true,
+        ".read": "$room.matches(/^[0-9]{4}$/)",
+        ".write": "$room.matches(/^[0-9]{4}$/)",
+        "match": {
+          ".validate": "newData.hasChildren(['blueName','redName','blueScore','redScore','durationMs','remainingMs','running','phase','scoresVisible','historySaved','updatedAt'])",
+          "blueName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30" },
+          "redName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30" },
+          "blueScore": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999" },
+          "redScore": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999" },
+          "durationMs": { ".validate": "newData.isNumber() && newData.val() >= 1000 && newData.val() <= 5999000" },
+          "remainingMs": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5999000" },
+          "running": { ".validate": "newData.isBoolean()" },
+          "phase": { ".validate": "newData.isString() && newData.val().matches(/^(idle|countdown|running|paused|timeup|finished)$/)" },
+          "scoresVisible": { ".validate": "newData.isBoolean()" },
+          "historySaved": { ".validate": "newData.isBoolean()" },
+          "startTs": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "endTs": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "countdownValue": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3" },
+          "countdownEndTs": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "matchId": { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "historyEntryId": { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "startedAt": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "finishReason": { ".validate": "newData.isString() && newData.val().matches(/^(manual|time)$/)" },
+          "updatedAt": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "$other": { ".validate": false }
+        },
         "history": {
-          ".indexOn": ["endedAt"]
-        }
+          ".indexOn": ["endedAt"],
+          "$historyId": {
+            ".validate": "newData.hasChildren(['historyId','matchId','blueName','redName','blueScore','redScore','durationMs','playedMs','endedAt','finishReason'])",
+            "historyId": { ".validate": "newData.isString() && newData.val().length <= 128" },
+            "matchId": { ".validate": "newData.isString() && newData.val().length <= 128" },
+            "blueName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30" },
+            "redName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30" },
+            "blueScore": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999" },
+            "redScore": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999" },
+            "durationMs": { ".validate": "newData.isNumber() && newData.val() >= 1000 && newData.val() <= 5999000" },
+            "playedMs": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5999000" },
+            "startedAt": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "endedAt": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "finishReason": { ".validate": "newData.isString() && newData.val().matches(/^(manual|time)$/)" },
+            "$other": { ".validate": false }
+          }
+        },
+        "$other": { ".validate": false }
       }
     }
   }

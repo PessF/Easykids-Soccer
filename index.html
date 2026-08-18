@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260816-history4">
+  <link rel="stylesheet" href="css/styles.css?v=20260818-stable1">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('ek-soccer-theme')||'light'}catch(_){}</script>
 </head>
 <body>
@@ -26,7 +26,7 @@
       </div>
       <label class="field-label" for="roomPassword">รหัสผ่านห้อง / Room Password</label>
       <input id="roomPassword" class="password-input" type="password" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="••••" aria-label="รหัสผ่านห้อง">
-      <button id="joinRoom" class="button primary full">เข้าสู่หน้าควบคุม</button>
+      <button id="joinRoom" class="button primary full" type="button">เข้าสู่หน้าควบคุม</button>
       <button id="openDisplayGate" class="button ghost full">เปิดหน้าจอแสดงผล</button>
     </div>
   </section>
@@ -94,8 +94,8 @@
           <div class="panel-content">
             <label class="field-label">ระยะเวลาแข่งขัน</label>
             <div class="duration-grid">
-              <label><input id="durationMinutes" type="number" min="0" max="99" value="5"><span>นาที</span></label><b>:</b>
-              <label><input id="durationSeconds" type="number" min="0" value="0"><span>วินาที</span></label>
+              <label><input id="durationMinutes" type="number" min="0" max="99" step="1" value="5"><span>นาที</span></label><b>:</b>
+              <label><input id="durationSeconds" type="number" min="0" max="59" step="1" value="0"><span>วินาที</span></label>
             </div>
             <button id="applyDuration" class="button primary full">ใช้เวลานี้</button>
             <label class="switch-row">
@@ -139,11 +139,11 @@
 
   <audio id="countdownAudio" src="sounds/countdown.mp3" preload="auto"></audio>
   <audio id="whistleAudio" src="sounds/whistle.mp3" preload="auto"></audio>
-  <div id="toast" class="toast" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="js/firebase-config.js?v=20260816-history4"></script>
-  <script src="js/control.js?v=20260816-history4"></script>
+  <script src="js/firebase-config.js?v=20260818-stable1"></script>
+  <script src="js/control.js?v=20260818-stable1"></script>
 </body>
 </html>
