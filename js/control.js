@@ -2,6 +2,7 @@
   "use strict";
 
   const ROOM_PASSWORD = "2877";
+  const APP_VERSION = "stable3-pause-fix";
   const DEFAULT_DURATION = 5 * 60 * 1000;
   const DEFAULT_MATCH = {
     blueName: "ทีมสีน้ำเงิน", redName: "ทีมสีแดง",
@@ -43,6 +44,8 @@
     if (!firebase.apps.length) firebase.initializeApp(window.EK_FIREBASE_CONFIG);
     db = firebase.database();
   }
+
+  console.info("EasyKids Robot Soccer Control", APP_VERSION);
 
   function validRoom(value) { return /^\d{4}$/.test(value); }
   function cleanRoomInput() { $("roomCode").value = $("roomCode").value.replace(/\D/g, "").slice(0, 4); }
@@ -119,11 +122,15 @@
 
   function nowMs() { return Date.now() + serverOffsetMs; }
 
-  function liveRemaining(match) {
+  function remainingAt(match, timestamp) {
     if (!match.running) return Number(match.remainingMs) || 0;
-    if (match.endTs != null && Number.isFinite(Number(match.endTs))) return Number(match.endTs) - nowMs();
+    if (match.endTs != null && Number.isFinite(Number(match.endTs))) return Number(match.endTs) - timestamp;
     if (!match.startTs) return Number(match.remainingMs) || 0;
-    return (Number(match.remainingMs) || 0) - (nowMs() - match.startTs);
+    return (Number(match.remainingMs) || 0) - (timestamp - Number(match.startTs));
+  }
+
+  function liveRemaining(match) {
+    return remainingAt(match, nowMs());
   }
 
   function formatClock(ms) {
@@ -296,24 +303,36 @@
     const transitionNow = nowMs();
     roomRef.transaction((current) => {
       if (!current || current.phase !== "running" || !current.running) return;
+      // ต้องคำนวณก่อนเปลี่ยน running เป็น false ไม่เช่นนั้นจะได้ค่า remainingMs เดิม
+      // ซึ่งมักเป็นเวลาเต็มของการแข่งขันและทำให้ Resume เหมือนเริ่มนับใหม่
+      const duration = Math.max(0, Number(current.durationMs) || 0);
+      const pausedRemaining = Math.max(0, remainingAt(current, transitionNow));
+      current.remainingMs = duration ? Math.min(duration, pausedRemaining) : pausedRemaining;
       current.phase = "paused";
       current.running = false;
-      current.remainingMs = Math.max(0, liveRemaining(current));
       current.startTs = null;
       current.endTs = null;
       current.countdownValue = null;
       current.countdownEndTs = null;
       current.updatedAt = transitionNow;
       return current;
-    }, (error) => { if (error) firebaseError(error); }, false);
+    }, (error, committed, snapshot) => {
+      if (error) return firebaseError(error);
+      if (!committed || !snapshot) return toast("ไม่สามารถหยุดเวลาได้ เพราะสถานะแมตช์ถูกเปลี่ยนจากอุปกรณ์อื่น");
+      const savedMatch = snapshot.val() || {};
+      toast("หยุดเวลาไว้ที่ " + formatRemainingTime(savedMatch.remainingMs));
+    }, false);
   }
 
   function resumeMatch() {
     const resumeNow = nowMs();
     roomRef.transaction((current) => {
       if (!current || current.phase !== "paused") return;
-      const remaining = Math.max(0, Number(current.remainingMs) || 0);
+      const duration = Math.max(0, Number(current.durationMs) || 0);
+      const storedRemaining = Math.max(0, Number(current.remainingMs) || 0);
+      const remaining = duration ? Math.min(duration, storedRemaining) : storedRemaining;
       if (!remaining) return;
+      current.remainingMs = remaining;
       current.phase = "running";
       current.running = true;
       current.startTs = resumeNow;
@@ -322,10 +341,18 @@
       current.countdownEndTs = null;
       current.updatedAt = resumeNow;
       return current;
-    }, (error, committed) => {
+    }, (error, committed, snapshot) => {
       if (error) return firebaseError(error);
       if (!committed) toast("ไม่สามารถเดินเวลาต่อได้ กรุณาตรวจสอบเวลาคงเหลือ");
+      else toast("เดินเวลาต่อจาก " + formatRemainingTime((snapshot.val() || {}).remainingMs));
     }, false);
+  }
+
+  function formatRemainingTime(ms) {
+    const totalSeconds = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+    const seconds = String(totalSeconds % 60).padStart(2, "0");
+    return minutes + ":" + seconds;
   }
 
   function finishMatch() {
