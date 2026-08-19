@@ -2,7 +2,7 @@
   "use strict";
 
   const ROOM_PASSWORD = "2877";
-  const APP_VERSION = "stable3-pause-fix";
+  const APP_VERSION = "stable4-countdown-fix";
   const DEFAULT_DURATION = 5 * 60 * 1000;
   const DEFAULT_MATCH = {
     blueName: "ทีมสีน้ำเงิน", redName: "ทีมสีแดง",
@@ -24,6 +24,7 @@
   let timeUpPending = false;
   let finishingMatch = false;
   let countdownDriver = null;
+  let lastCountdownNumber = null;
   let nameTimer = null;
   let toastTimer = null;
   let serverOffsetMs = 0;
@@ -186,7 +187,6 @@
     $("pauseMatch").hidden = phase !== "running";
     $("resumeMatch").hidden = phase !== "paused";
     $("countdownState").hidden = phase !== "countdown";
-    $("countdownMini").textContent = state.countdownValue || 3;
     $("finishMatch").disabled = finishingMatch || phase === "idle" || phase === "finished";
 
     if (phase === "countdown") startCountdownDriver(); else stopCountdownDriver();
@@ -233,12 +233,13 @@
   function startCountdownDriver() {
     if (countdownDriver || !state.countdownEndTs) return;
     const tick = () => {
-      const value = Math.max(0, Math.ceil((Number(state.countdownEndTs) - nowMs()) / 1000));
-      $("countdownMini").textContent = value > 0 ? value : "GO!";
-      if (value > 0) {
-        if (value !== state.countdownValue) updateMatch({ countdownValue: value });
-        return;
-      }
+      const calculated = Math.min(3, Math.max(0, Math.ceil((Number(state.countdownEndTs) - nowMs()) / 1000)));
+      // เลขนับถอยหลังต้องลดลงเท่านั้น ป้องกัน server offset หรือ snapshot เก่า
+      // ทำให้ตัวเลขย้อนจาก 2 กลับเป็น 3
+      const value = lastCountdownNumber == null ? calculated : Math.min(lastCountdownNumber, calculated);
+      if (value !== lastCountdownNumber) $("countdownMini").textContent = value > 0 ? value : "GO!";
+      lastCountdownNumber = value;
+      if (value > 0) return;
       stopCountdownDriver();
       completeCountdown();
     };
@@ -272,6 +273,7 @@
   function stopCountdownDriver() {
     if (countdownDriver) clearInterval(countdownDriver);
     countdownDriver = null;
+    lastCountdownNumber = null;
   }
 
   function startMatch() {

@@ -3,7 +3,7 @@
   const ROOM_PASSWORD = "2877";
   const DEFAULT_MATCH = { blueName:"ทีมสีน้ำเงิน", redName:"ทีมสีแดง", blueScore:0, redScore:0, durationMs:300000, remainingMs:300000, running:false, startTs:null, endTs:null, phase:"idle", countdownValue:null, countdownEndTs:null, scoresVisible:true, matchId:null, historyEntryId:null, startedAt:null, finishReason:null, historySaved:false };
   const $ = (id) => document.getElementById(id);
-  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, countdownDriver = null, lastPhase = "idle", serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null;
+  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, countdownDriver = null, lastCountdownNumber = null, lastPhase = "idle", serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null;
 
   const queryRoom = new URLSearchParams(location.search).get("room") || "";
   $("displayRoomCode").value = queryRoom.replace(/\D/g, "").slice(0, 4);
@@ -62,7 +62,6 @@
     $("matchDisplay").classList.toggle("is-paused", state.phase === "paused");
     $("countdownOverlay").hidden = state.phase !== "countdown";
     if (state.phase === "countdown") {
-      $("countdownNumber").textContent = state.countdownValue > 0 ? state.countdownValue : "GO!";
       if (lastPhase !== "countdown") playAudio("displayCountdownAudio");
     }
     if (state.phase === "running" && lastPhase === "countdown") playAudio("displayWhistleAudio");
@@ -80,8 +79,8 @@
   function winner(id, active) { const box=$(id); box.classList.toggle("winner",active); box.querySelector(".winner-label").hidden=!active; }
   function restartClock() { if(clockFrame)cancelAnimationFrame(clockFrame);clockFrame=null;timeUpPending=false;const tick=()=>{const remaining=liveRemaining(state);paintClock($("displayClock"),remaining);$("displayTimerBox").classList.toggle("danger",remaining>0&&remaining<=10000);if(state.running&&remaining<=0&&!timeUpPending){timeUpPending=true;markTimeUp();return;}if(state.running)clockFrame=requestAnimationFrame(tick);};tick();}
   function markTimeUp(){if(!roomRef)return;const transitionNow=nowMs();roomRef.transaction((current)=>{if(!current||!current.running)return;if(current.endTs!=null&&Number(current.endTs)>transitionNow)return;current.running=false;current.remainingMs=0;current.startTs=null;current.endTs=null;current.phase="timeup";current.updatedAt=transitionNow;return current;},(error)=>{if(error)console.error(error);},false);}
-  function startCountdownDriver(){if(countdownDriver||!state.countdownEndTs)return;const tick=()=>{const value=Math.max(0,Math.ceil((Number(state.countdownEndTs)-nowMs())/1000));$("countdownNumber").textContent=value>0?value:"GO!";if(value<=0){stopCountdownDriver();completeCountdown();}};countdownDriver=setInterval(tick,100);tick();}
-  function stopCountdownDriver(){if(countdownDriver)clearInterval(countdownDriver);countdownDriver=null;}
+  function startCountdownDriver(){if(countdownDriver||!state.countdownEndTs)return;const tick=()=>{const calculated=Math.min(3,Math.max(0,Math.ceil((Number(state.countdownEndTs)-nowMs())/1000))),value=lastCountdownNumber==null?calculated:Math.min(lastCountdownNumber,calculated);if(value!==lastCountdownNumber)$("countdownNumber").textContent=value>0?value:"GO!";lastCountdownNumber=value;if(value<=0){stopCountdownDriver();completeCountdown();}};countdownDriver=setInterval(tick,100);tick();}
+  function stopCountdownDriver(){if(countdownDriver)clearInterval(countdownDriver);countdownDriver=null;lastCountdownNumber=null;}
   function completeCountdown(){if(!roomRef)return;const transitionNow=nowMs();roomRef.transaction((current)=>{if(!current||current.phase!=="countdown"||Number(current.countdownEndTs)>transitionNow)return;const remaining=Math.max(0,Number(current.remainingMs)||Number(current.durationMs)||0);current.phase=remaining>0?"running":"finished";current.running=remaining>0;current.startTs=remaining>0?transitionNow:null;current.endTs=remaining>0?transitionNow+remaining:null;current.countdownValue=0;current.countdownEndTs=null;current.updatedAt=transitionNow;return current;},(error)=>{if(error)console.error(error);},false);}
   function showEntryError(message){$("displayEntryError").textContent=message;$("displayEntryError").hidden=false;}
   function ensureAudioContext() {
