@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260818-stable1">
+  <link rel="stylesheet" href="css/styles.css?v=20260819-stable6-fullsize-ms">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('ek-soccer-theme')||'light'}catch(_){}</script>
 </head>
 <body>
@@ -35,7 +35,7 @@
     <header class="control-header">
       <div>
         <p class="brand-line">EASY<span>KIDS</span> · ROBOT SOCCER</p>
-        <p class="header-caption">Competition Control Center · stable4 Countdown Fix</p>
+        <p class="header-caption">Competition Control Center · stable6 Full-size Milliseconds</p>
       </div>
       <button id="roomPill" class="room-pill">ROOM ----</button>
       <div id="syncState" class="sync-state"><span class="sync-dot"></span><span id="syncText">กำลังเชื่อมต่อ</span></div>
@@ -71,18 +71,18 @@
             <span class="live-tag"><span></span> LIVE</span>
           </div>
           <div class="score-controls">
-            <div class="team-score-card blue">
-              <div class="team-color-line"></div>
-              <input id="blueName" class="team-name-input" value="ทีมสีน้ำเงิน" maxlength="30" aria-label="ชื่อทีมสีน้ำเงิน">
-              <div id="blueScore" class="score-number">0</div>
-              <div class="score-buttons"><button data-score="blue" data-value="-1" aria-label="ลดคะแนนทีมสีน้ำเงิน">-</button><button data-score="blue" data-value="1" aria-label="เพิ่มคะแนนทีมสีน้ำเงิน">+</button></div>
-            </div>
-            <div class="versus">VS</div>
             <div class="team-score-card red">
               <div class="team-color-line"></div>
               <input id="redName" class="team-name-input" value="ทีมสีแดง" maxlength="30" aria-label="ชื่อทีมสีแดง">
               <div id="redScore" class="score-number">0</div>
               <div class="score-buttons"><button data-score="red" data-value="-1" aria-label="ลดคะแนนทีมสีแดง">-</button><button data-score="red" data-value="1" aria-label="เพิ่มคะแนนทีมสีแดง">+</button></div>
+            </div>
+            <div class="versus">VS</div>
+            <div class="team-score-card blue">
+              <div class="team-color-line"></div>
+              <input id="blueName" class="team-name-input" value="ทีมสีน้ำเงิน" maxlength="30" aria-label="ชื่อทีมสีน้ำเงิน">
+              <div id="blueScore" class="score-number">0</div>
+              <div class="score-buttons"><button data-score="blue" data-value="-1" aria-label="ลดคะแนนทีมสีน้ำเงิน">-</button><button data-score="blue" data-value="1" aria-label="เพิ่มคะแนนทีมสีน้ำเงิน">+</button></div>
             </div>
           </div>
         </article>
@@ -120,7 +120,7 @@
         <article class="display-preview">
           <div class="preview-top"><span>LIVE DISPLAY</span><span>OPEN</span></div>
           <div id="previewClock" class="preview-clock"><span class="clock"><span class="clock-main">05:00</span><span class="clock-ms">.000</span></span></div>
-          <div class="preview-scores"><span id="previewBlue">0</span><b>–</b><span id="previewRed">0</span></div>
+          <div class="preview-scores"><span id="previewRed" class="preview-red">0</span><b>–</b><span id="previewBlue" class="preview-blue">0</span></div>
           <button id="openDisplayPreview">เปิดแบบเต็มหน้าจอ</button>
         </article>
       </aside>
@@ -144,6 +144,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="js/firebase-config.js?v=20260818-stable1"></script>
-  <script src="js/control.js?v=20260819-stable4-countdown-fix"></script>
+  <script src="js/control.js?v=20260819-stable6-fullsize-ms"></script>
 </body>
 </html>

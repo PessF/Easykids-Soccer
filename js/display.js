@@ -3,7 +3,7 @@
   const ROOM_PASSWORD = "2877";
   const DEFAULT_MATCH = { blueName:"ทีมสีน้ำเงิน", redName:"ทีมสีแดง", blueScore:0, redScore:0, durationMs:300000, remainingMs:300000, running:false, startTs:null, endTs:null, phase:"idle", countdownValue:null, countdownEndTs:null, scoresVisible:true, matchId:null, historyEntryId:null, startedAt:null, finishReason:null, historySaved:false };
   const $ = (id) => document.getElementById(id);
-  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, countdownDriver = null, lastCountdownNumber = null, lastPhase = "idle", serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null;
+  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, countdownDriver = null, lastCountdownNumber = null, lastPhase = null, serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null;
 
   const queryRoom = new URLSearchParams(location.search).get("room") || "";
   $("displayRoomCode").value = queryRoom.replace(/\D/g, "").slice(0, 4);
@@ -65,6 +65,7 @@
       if (lastPhase !== "countdown") playAudio("displayCountdownAudio");
     }
     if (state.phase === "running" && lastPhase === "countdown") playAudio("displayWhistleAudio");
+    if (state.phase === "timeup" && lastPhase !== null && lastPhase !== "timeup") playAudio("displayWhistleAudio");
     lastPhase = state.phase;
     const blueScore = Number(state.blueScore) || 0;
     const redScore = Number(state.redScore) || 0;

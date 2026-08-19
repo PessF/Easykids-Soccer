@@ -2,7 +2,7 @@
   "use strict";
 
   const ROOM_PASSWORD = "2877";
-  const APP_VERSION = "stable4-countdown-fix";
+  const APP_VERSION = "stable6-fullsize-milliseconds";
   const DEFAULT_DURATION = 5 * 60 * 1000;
   const DEFAULT_MATCH = {
     blueName: "ทีมสีน้ำเงิน", redName: "ทีมสีแดง",
@@ -25,6 +25,7 @@
   let finishingMatch = false;
   let countdownDriver = null;
   let lastCountdownNumber = null;
+  let lastPhase = null;
   let nameTimer = null;
   let toastTimer = null;
   let serverOffsetMs = 0;
@@ -181,6 +182,10 @@
     }
 
     const phase = state.phase || "idle";
+    if (phase === "timeup" && lastPhase !== null && lastPhase !== "timeup") {
+      playAudio("whistleAudio");
+    }
+    lastPhase = phase;
     $("phaseChip").className = "phase-chip " + phase;
     $("phaseChip").textContent = phaseLabel(phase);
     $("startMatch").hidden = !(phase === "idle" || phase === "finished");
@@ -494,7 +499,7 @@
       const played = formatHistoryDuration(Number(value.playedMs) || Number(value.durationMs) || 0);
       const blueName = escapeHtml(value.blueName || "ทีมสีน้ำเงิน");
       const redName = escapeHtml(value.redName || "ทีมสีแดง");
-      return '<article class="history-item"><div class="history-meta"><span>' + date + '</span><small>' + (value.finishReason === "time" ? "หมดเวลา" : "จบโดยกรรมการ") + ' · ใช้เวลา ' + played + '</small></div><div class="history-result"><span class="history-team blue">' + blueName + '</span><strong>' + (Number(value.blueScore) || 0) + '<i>–</i>' + (Number(value.redScore) || 0) + '</strong><span class="history-team red">' + redName + '</span></div><button class="history-delete" data-history-delete="' + escapeHtml(key) + '" aria-label="ลบประวัติแมตช์นี้">ลบ</button></article>';
+      return '<article class="history-item"><div class="history-meta"><span>' + date + '</span><small>' + (value.finishReason === "time" ? "หมดเวลา" : "จบโดยกรรมการ") + ' · ใช้เวลา ' + played + '</small></div><div class="history-result"><span class="history-team red">' + redName + '</span><strong>' + (Number(value.redScore) || 0) + '<i>–</i>' + (Number(value.blueScore) || 0) + '</strong><span class="history-team blue">' + blueName + '</span></div><button class="history-delete" data-history-delete="' + escapeHtml(key) + '" aria-label="ลบประวัติแมตช์นี้">ลบ</button></article>';
     }).join("");
   }
 

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260818-stable1">
+  <link rel="stylesheet" href="css/styles.css?v=20260819-stable6-fullsize-ms">
 </head>
 <body class="display-body">
   <section id="displayEntry" class="display-entry">
@@ -33,12 +33,12 @@
       <div id="displayTimerBox" class="display-timer"><span id="displayClock" class="clock clock-large"><span class="clock-main">05:00</span><span class="clock-ms">.000</span></span></div>
       <div class="match-rule"><span></span><b>ROBOT SOCCER MATCH</b><span></span></div>
       <div id="displayScoreboard" class="display-scoreboard">
-        <div id="blueTeamBox" class="display-team blue"><span class="winner-label" hidden>WINNER</span><div class="team-accent"></div><p id="displayBlueName">ทีมสีน้ำเงิน</p><strong id="displayBlueScore">0</strong></div>
-        <div class="display-versus"><span>VS</span><small>LIVE</small></div>
         <div id="redTeamBox" class="display-team red"><span class="winner-label" hidden>WINNER</span><div class="team-accent"></div><p id="displayRedName">ทีมสีแดง</p><strong id="displayRedScore">0</strong></div>
+        <div class="display-versus"><span>VS</span><small>LIVE</small></div>
+        <div id="blueTeamBox" class="display-team blue"><span class="winner-label" hidden>WINNER</span><div class="team-accent"></div><p id="displayBlueName">ทีมสีน้ำเงิน</p><strong id="displayBlueScore">0</strong></div>
       </div>
     </section>
-    <footer class="display-footer"><span>OFFICIAL MATCH DISPLAY</span><span>REAL-TIME SCORING SYSTEM · stable4</span></footer>
+    <footer class="display-footer"><span>OFFICIAL MATCH DISPLAY</span><span>REAL-TIME SCORING SYSTEM · stable6</span></footer>
     <div class="display-tools"><button id="fullscreenButton" aria-label="เต็มหน้าจอ">FULL</button><button id="displaySettingsButton" aria-label="ตั้งค่าเสียง">SET</button></div>
     <div id="displaySettings" class="display-settings" hidden><button id="closeDisplaySettings" class="close-settings">ปิด</button><h2>เสียงการแข่งขัน</h2><p>ระบบใช้ไฟล์เสียงชื่อเดิมจากโฟลเดอร์ <code>sounds/</code></p><button id="displayTestCountdown">ทดสอบเสียง 3–2–1</button><button id="displayTestWhistle">ทดสอบเสียงนกหวีด</button></div>
     <div id="countdownOverlay" class="countdown-overlay" hidden><p>เตรียมพร้อม</p><strong id="countdownNumber">3</strong><span>ROBOT SOCCER</span></div>
@@ -50,6 +50,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="js/firebase-config.js?v=20260818-stable1"></script>
-  <script src="js/display.js?v=20260819-stable4-countdown-fix"></script>
+  <script src="js/display.js?v=20260819-stable6-fullsize-ms"></script>
 </body>
 </html>
