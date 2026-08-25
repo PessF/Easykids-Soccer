@@ -18,6 +18,7 @@
           "phase": { ".validate": "newData.isString() && newData.val().matches(/^(idle|countdown|running|paused|timeup|finished)$/)" },
           "scoresVisible": { ".validate": "newData.isBoolean()" },
           "historySaved": { ".validate": "newData.isBoolean()" },
+          "sidesSwapped": { ".validate": "newData.isBoolean()" },
           "startTs": { ".validate": "newData.isNumber() && newData.val() >= 0" },
           "endTs": { ".validate": "newData.isNumber() && newData.val() >= 0" },
           "countdownValue": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3" },

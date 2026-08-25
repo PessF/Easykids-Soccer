@@ -2,7 +2,7 @@
   "use strict";
 
   const ROOM_PASSWORD = "2877";
-  const APP_VERSION = "stable6-fullsize-milliseconds";
+  const APP_VERSION = "stable8-side-clarity";
   const DEFAULT_DURATION = 5 * 60 * 1000;
   const DEFAULT_MATCH = {
     blueName: "ทีมสีน้ำเงิน", redName: "ทีมสีแดง",
@@ -11,7 +11,7 @@
     running: false, startTs: null, endTs: null, phase: "idle",
     countdownValue: null, countdownEndTs: null,
     scoresVisible: true, matchId: null, historyEntryId: null, startedAt: null, finishReason: null,
-    historySaved: false,
+    historySaved: false, sidesSwapped: false,
     updatedAt: 0
   };
 
@@ -33,6 +33,8 @@
   let joined = false;
   let lastFirebaseErrorAt = 0;
   let audioContext = null;
+  let lastSidesSwapped = null;
+  let sideAnimationTimer = null;
 
   const $ = (id) => document.getElementById(id);
 
@@ -175,6 +177,15 @@
     $("previewBlue").textContent = Number(state.blueScore) || 0;
     $("previewRed").textContent = Number(state.redScore) || 0;
     $("scoresVisible").checked = state.scoresVisible !== false;
+    const sidesSwapped = state.sidesSwapped === true;
+    $("scoreControls").classList.toggle("sides-swapped", sidesSwapped);
+    $("previewScores").classList.toggle("sides-swapped", sidesSwapped);
+    $("swapTeams").setAttribute("aria-pressed", String(sidesSwapped));
+    $("redSideLabel").textContent = sidesSwapped ? "RIGHT SIDE" : "LEFT SIDE";
+    $("blueSideLabel").textContent = sidesSwapped ? "LEFT SIDE" : "RIGHT SIDE";
+    $("swapTeams").title = sidesSwapped ? "สลับกลับ: สีแดงซ้าย · สีน้ำเงินขวา" : "สลับฝั่ง: สีน้ำเงินซ้าย · สีแดงขวา";
+    if (lastSidesSwapped !== null && lastSidesSwapped !== sidesSwapped) animateSideSwap();
+    lastSidesSwapped = sidesSwapped;
 
     if (document.activeElement !== $("durationMinutes") && document.activeElement !== $("durationSeconds")) {
       $("durationMinutes").value = Math.floor(state.durationMs / 60000);
@@ -529,12 +540,38 @@
     }, false);
   }
 
+  function swapTeams() {
+    if (!roomRef || $("swapTeams").disabled) return;
+    $("swapTeams").disabled = true;
+    roomRef.transaction((current) => {
+      if (!current) return;
+      return window.EKTeamSwap.toggleSides(current, nowMs());
+    }, (error, committed, snapshot) => {
+      $("swapTeams").disabled = false;
+      if (error) return firebaseError(error);
+      if (!committed) return toast("ไม่สามารถสลับฝั่งได้ กรุณาลองใหม่");
+      const swapped = !!snapshot && (snapshot.val() || {}).sidesSwapped === true;
+      toast(swapped ? "สีน้ำเงินอยู่ซ้าย · สีแดงอยู่ขวา" : "สีแดงอยู่ซ้าย · สีน้ำเงินอยู่ขวา");
+    }, false);
+  }
+
+  function animateSideSwap() {
+    clearTimeout(sideAnimationTimer);
+    $("scoreControls").classList.remove("side-swap-flash");
+    void $("scoreControls").offsetWidth;
+    $("scoreControls").classList.add("side-swap-flash");
+    sideAnimationTimer = setTimeout(() => $("scoreControls").classList.remove("side-swap-flash"), 450);
+  }
+
   function saveTeamNames() {
     clearTimeout(nameTimer);
-    nameTimer = setTimeout(() => updateMatch({
-      blueName: $("blueName").value.trim() || "ทีมสีน้ำเงิน",
-      redName: $("redName").value.trim() || "ทีมสีแดง"
-    }), 250);
+    nameTimer = setTimeout(() => {
+      nameTimer = null;
+      updateMatch({
+        blueName: $("blueName").value.trim() || "ทีมสีน้ำเงิน",
+        redName: $("redName").value.trim() || "ทีมสีแดง"
+      });
+    }, 250);
   }
 
   function newMatch() {
@@ -542,6 +579,7 @@
     roomRef.set(Object.assign({}, DEFAULT_MATCH, {
       blueName: state.blueName, redName: state.redName,
       durationMs: state.durationMs, remainingMs: state.durationMs,
+      sidesSwapped: state.sidesSwapped === true,
       updatedAt: nowMs()
     })).then(() => toast("พร้อมสำหรับแมตช์ใหม่")).catch(firebaseError);
   }
@@ -615,6 +653,7 @@
   $("resetTimer").addEventListener("click", resetTimer);
   $("applyDuration").addEventListener("click", applyDuration);
   $("newMatch").addEventListener("click", newMatch);
+  $("swapTeams").addEventListener("click", swapTeams);
   $("clearHistory").addEventListener("click", clearHistory);
   $("historyList").addEventListener("click", (event) => {
     const button = event.target.closest("[data-history-delete]");

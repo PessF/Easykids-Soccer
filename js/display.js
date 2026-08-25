@@ -1,9 +1,9 @@
 (function () {
   "use strict";
   const ROOM_PASSWORD = "2877";
-  const DEFAULT_MATCH = { blueName:"ทีมสีน้ำเงิน", redName:"ทีมสีแดง", blueScore:0, redScore:0, durationMs:300000, remainingMs:300000, running:false, startTs:null, endTs:null, phase:"idle", countdownValue:null, countdownEndTs:null, scoresVisible:true, matchId:null, historyEntryId:null, startedAt:null, finishReason:null, historySaved:false };
+  const DEFAULT_MATCH = { blueName:"ทีมสีน้ำเงิน", redName:"ทีมสีแดง", blueScore:0, redScore:0, durationMs:300000, remainingMs:300000, running:false, startTs:null, endTs:null, phase:"idle", countdownValue:null, countdownEndTs:null, scoresVisible:true, matchId:null, historyEntryId:null, startedAt:null, finishReason:null, historySaved:false, sidesSwapped:false };
   const $ = (id) => document.getElementById(id);
-  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, countdownDriver = null, lastCountdownNumber = null, lastPhase = null, serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null;
+  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, countdownDriver = null, lastCountdownNumber = null, lastPhase = null, serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null, lastSidesSwapped = null, sideAnimationTimer = null, displayToastTimer = null;
 
   const queryRoom = new URLSearchParams(location.search).get("room") || "";
   $("displayRoomCode").value = queryRoom.replace(/\D/g, "").slice(0, 4);
@@ -56,6 +56,15 @@
     setScore("displayBlueScore", Number(state.blueScore)||0);
     setScore("displayRedScore", Number(state.redScore)||0);
     $("displayScoreboard").hidden = state.scoresVisible === false;
+    const sidesSwapped = state.sidesSwapped === true;
+    $("displayScoreboard").classList.toggle("sides-swapped", sidesSwapped);
+    $("matchDisplay").classList.toggle("sides-swapped", sidesSwapped);
+    $("displaySwapTeams").setAttribute("aria-pressed", String(sidesSwapped));
+    $("displayRedSide").textContent = sidesSwapped ? "RIGHT SIDE" : "LEFT SIDE";
+    $("displayBlueSide").textContent = sidesSwapped ? "LEFT SIDE" : "RIGHT SIDE";
+    $("displaySwapTeams").title = sidesSwapped ? "สลับกลับ: สีแดงซ้าย · สีน้ำเงินขวา" : "สลับฝั่ง: สีน้ำเงินซ้าย · สีแดงขวา";
+    if (lastSidesSwapped !== null && lastSidesSwapped !== sidesSwapped) animateSideSwap();
+    lastSidesSwapped = sidesSwapped;
     $("displayPhase").className = "phase-display " + state.phase;
     $("displayPhase").textContent = phaseLabel(state.phase);
     $("pausedRibbon").hidden = state.phase !== "paused";
@@ -115,6 +124,47 @@
     audio.pause(); audio.currentTime=0; audio.play().catch(()=>synthAudio(kind));
   }
 
+  function swapTeams() {
+    const button = $("displaySwapTeams");
+    if (!roomRef || button.disabled) return;
+    button.disabled = true;
+    button.textContent = "WAIT";
+    roomRef.transaction((current) => {
+      if (!current) return;
+      return window.EKTeamSwap.toggleSides(current, nowMs());
+    }, (error, committed, snapshot) => {
+      if (error) {
+        console.error(error);
+        showDisplayToast("SWAP FAILED · กรุณาลองใหม่");
+      } else if (!committed) {
+        showDisplayToast("SWAP FAILED · ไม่พบข้อมูลแมตช์");
+      } else {
+        const swapped = !!snapshot && (snapshot.val() || {}).sidesSwapped === true;
+        showDisplayToast(swapped ? "BLUE LEFT · RED RIGHT" : "RED LEFT · BLUE RIGHT");
+      }
+      button.textContent = error || !committed ? "RETRY" : "DONE";
+      setTimeout(() => {
+        button.textContent = "SWAP";
+        button.disabled = false;
+      }, error || !committed ? 1600 : 700);
+    }, false);
+  }
+
+  function animateSideSwap() {
+    clearTimeout(sideAnimationTimer);
+    $("displayScoreboard").classList.remove("side-swap-flash");
+    void $("displayScoreboard").offsetWidth;
+    $("displayScoreboard").classList.add("side-swap-flash");
+    sideAnimationTimer = setTimeout(() => $("displayScoreboard").classList.remove("side-swap-flash"), 450);
+  }
+
+  function showDisplayToast(message) {
+    clearTimeout(displayToastTimer);
+    $("displayToast").textContent = message;
+    $("displayToast").hidden = false;
+    displayToastTimer = setTimeout(() => { $("displayToast").hidden = true; }, 2200);
+  }
+
   $("displayRoomCode").addEventListener("input",()=>{$("displayRoomCode").value=$("displayRoomCode").value.replace(/\D/g,"").slice(0,4);});
   $("displayRoomPassword").addEventListener("input",()=>{$("displayRoomPassword").value=$("displayRoomPassword").value.replace(/\D/g,"").slice(0,4);});
   $("displayRoomCode").addEventListener("keydown",(event)=>{if(event.key==="Enter")$("displayRoomPassword").focus();});
@@ -131,6 +181,7 @@
     }
     if(!document.fullscreenElement)document.documentElement.requestFullscreen().catch(()=>{});else document.exitFullscreen().catch(()=>{});
   });
+  $("displaySwapTeams").addEventListener("click",swapTeams);
   $("displaySettingsButton").addEventListener("click",()=>{$("displaySettings").hidden=!$("displaySettings").hidden;});
   $("closeDisplaySettings").addEventListener("click",()=>{$("displaySettings").hidden=true;});
   $("displayTestCountdown").addEventListener("click",()=>playAudio("displayCountdownAudio"));
