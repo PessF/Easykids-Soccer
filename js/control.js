@@ -21,6 +21,7 @@
   let roomCode = "";
   let state = Object.assign({}, DEFAULT_MATCH);
   let clockFrame = null;
+  let clockInterval = null;
   let timeUpPending = false;
   let finishingMatch = false;
   let countdownDriver = null;
@@ -211,9 +212,11 @@
 
   function restartClock() {
     if (clockFrame) cancelAnimationFrame(clockFrame);
+    if (clockInterval) clearInterval(clockInterval);
     clockFrame = null;
+    clockInterval = null;
     timeUpPending = false;
-    const tick = () => {
+    const evaluate = () => {
       const remaining = liveRemaining(state);
       paintClock($("controlClock"), remaining);
       paintClock($("previewClock").querySelector(".clock"), remaining);
@@ -221,13 +224,24 @@
       if (state.running && remaining <= 0 && !timeUpPending) {
         timeUpPending = true;
         markTimeUp();
-        return;
+        return true;
       }
-      if (state.running) {
-        clockFrame = requestAnimationFrame(tick);
-      }
+      return false;
+    };
+    const tick = () => {
+      if (evaluate()) return;
+      if (state.running) clockFrame = requestAnimationFrame(tick);
     };
     tick();
+    // Safety net: requestAnimationFrame is fully suspended by the browser while this
+    // tab/screen is not in the foreground (switching apps, screen lock, etc.), so on
+    // its own it can freeze the display and only notice the match ended once the tab
+    // is refocused — which is exactly what looks like "jumping straight to 00:00".
+    // setInterval keeps running (throttled but alive) even while hidden, so it still
+    // catches the time-up moment close to when it actually happens.
+    if (state.running) {
+      clockInterval = setInterval(() => { if (evaluate()) { clearInterval(clockInterval); clockInterval = null; } }, 250);
+    }
   }
 
   function markTimeUp() {
@@ -619,6 +633,7 @@
   }
 
   function playAudio(id) {
+    ensureAudioContext();
     const audio = $(id);
     const kind = /whistle/i.test(id) ? "whistle" : "countdown";
     if (!audio || audio.dataset.failed === "true") return synthAudio(kind);
@@ -669,4 +684,5 @@
   [$("countdownAudio"), $("whistleAudio")].forEach((audio) => {
     if (audio) audio.addEventListener("error", () => { audio.dataset.failed = "true"; });
   });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && joined) { restartClock(); ensureAudioContext(); } });
 })();

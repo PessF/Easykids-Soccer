@@ -3,7 +3,7 @@
   const ROOM_PASSWORD = "2877";
   const DEFAULT_MATCH = { blueName:"ทีมสีน้ำเงิน", redName:"ทีมสีแดง", blueScore:0, redScore:0, durationMs:300000, remainingMs:300000, running:false, startTs:null, endTs:null, phase:"idle", countdownValue:null, countdownEndTs:null, scoresVisible:true, matchId:null, historyEntryId:null, startedAt:null, finishReason:null, historySaved:false, sidesSwapped:false };
   const $ = (id) => document.getElementById(id);
-  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, countdownDriver = null, lastCountdownNumber = null, lastPhase = null, serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null, lastSidesSwapped = null, sideAnimationTimer = null, displayToastTimer = null;
+  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, clockInterval = null, countdownDriver = null, lastCountdownNumber = null, lastPhase = null, serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null, lastSidesSwapped = null, sideAnimationTimer = null, displayToastTimer = null;
 
   const queryRoom = new URLSearchParams(location.search).get("room") || "";
   $("displayRoomCode").value = queryRoom.replace(/\D/g, "").slice(0, 4);
@@ -87,7 +87,25 @@
 
   function setScore(id, value) { const el=$(id); if(el.textContent===String(value)) return; el.textContent=value; el.classList.add("bump"); setTimeout(()=>el.classList.remove("bump"),180); }
   function winner(id, active) { const box=$(id); box.classList.toggle("winner",active); box.querySelector(".winner-label").hidden=!active; }
-  function restartClock() { if(clockFrame)cancelAnimationFrame(clockFrame);clockFrame=null;timeUpPending=false;const tick=()=>{const remaining=liveRemaining(state);paintClock($("displayClock"),remaining);$("displayTimerBox").classList.toggle("danger",remaining>0&&remaining<=10000);if(state.running&&remaining<=0&&!timeUpPending){timeUpPending=true;markTimeUp();return;}if(state.running)clockFrame=requestAnimationFrame(tick);};tick();}
+  function restartClock() {
+    if (clockFrame) cancelAnimationFrame(clockFrame);
+    if (clockInterval) clearInterval(clockInterval);
+    clockFrame = null; clockInterval = null; timeUpPending = false;
+    const evaluate = () => {
+      const remaining = liveRemaining(state);
+      paintClock($("displayClock"), remaining);
+      $("displayTimerBox").classList.toggle("danger", remaining > 0 && remaining <= 10000);
+      if (state.running && remaining <= 0 && !timeUpPending) { timeUpPending = true; markTimeUp(); return true; }
+      return false;
+    };
+    const tick = () => { if (evaluate()) return; if (state.running) clockFrame = requestAnimationFrame(tick); };
+    tick();
+    // Safety net: requestAnimationFrame fully stops while this screen/tab is not in the
+    // foreground, so on its own it freezes then jumps straight to 00:00 once it comes
+    // back. setInterval keeps ticking (throttled but alive) even while hidden, so the
+    // time-up transition still fires close to the real moment.
+    if (state.running) clockInterval = setInterval(() => { if (evaluate()) { clearInterval(clockInterval); clockInterval = null; } }, 250);
+  }
   function markTimeUp(){if(!roomRef)return;const transitionNow=nowMs();roomRef.transaction((current)=>{if(!current||!current.running)return;if(current.endTs!=null&&Number(current.endTs)>transitionNow)return;current.running=false;current.remainingMs=0;current.startTs=null;current.endTs=null;current.phase="timeup";current.updatedAt=transitionNow;return current;},(error)=>{if(error)console.error(error);},false);}
   function startCountdownDriver(){if(countdownDriver||!state.countdownEndTs)return;const tick=()=>{const calculated=Math.min(3,Math.max(0,Math.ceil((Number(state.countdownEndTs)-nowMs())/1000))),value=lastCountdownNumber==null?calculated:Math.min(lastCountdownNumber,calculated);if(value!==lastCountdownNumber)$("countdownNumber").textContent=value>0?value:"GO!";lastCountdownNumber=value;if(value<=0){stopCountdownDriver();completeCountdown();}};countdownDriver=setInterval(tick,100);tick();}
   function stopCountdownDriver(){if(countdownDriver)clearInterval(countdownDriver);countdownDriver=null;lastCountdownNumber=null;}
@@ -119,6 +137,7 @@
     });
   }
   function playAudio(id) {
+    ensureAudioContext();
     const audio=$(id), kind=/whistle/i.test(id)?"whistle":"countdown";
     if(!audio||audio.dataset.failed==="true")return synthAudio(kind);
     audio.pause(); audio.currentTime=0; audio.play().catch(()=>synthAudio(kind));
@@ -189,6 +208,6 @@
   [$("displayCountdownAudio"), $("displayWhistleAudio")].forEach((audio) => {
     if (audio) audio.addEventListener("error", () => { audio.dataset.failed = "true"; });
   });
-  document.addEventListener("visibilitychange",()=>{ if(!document.hidden && entered) restartClock(); });
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden && entered) { restartClock(); ensureAudioContext(); } });
   if (queryRoom) $("displayRoomPassword").focus();
 })();
