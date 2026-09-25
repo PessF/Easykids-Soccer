@@ -1,6 +1,5 @@
 (function () {
   "use strict";
-  const ROOM_PASSWORD = "2877";
   const DEFAULT_MATCH = { blueName:"ทีมสีน้ำเงิน", redName:"ทีมสีแดง", blueScore:0, redScore:0, durationMs:300000, remainingMs:300000, running:false, startTs:null, endTs:null, phase:"idle", countdownValue:null, countdownEndTs:null, scoresVisible:true, matchId:null, historyEntryId:null, startedAt:null, finishReason:null, historySaved:false, sidesSwapped:false };
   const $ = (id) => document.getElementById(id);
   let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, clockInterval = null, countdownDriver = null, lastCountdownNumber = null, lastPhase = null, serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null, lastSidesSwapped = null, sideAnimationTimer = null, displayToastTimer = null;
@@ -11,8 +10,7 @@
   function enterDisplay() {
     if (entered) return;
     roomCode = $("displayRoomCode").value.replace(/\D/g, "").slice(0, 4);
-    if (!/^\d{4}$/.test(roomCode)) { showEntryError("กรุณากรอกรหัสสนามเป็นตัวเลข 4 หลัก"); return; }
-    if ($("displayRoomPassword").value !== ROOM_PASSWORD) { showEntryError("รหัสผ่านห้องไม่ถูกต้อง"); return; }
+    if (!/^\d{4}$/.test(roomCode)) { showEntryError("กรุณากรอก Room Code เป็นตัวเลข 4 หลัก"); return; }
     if (!window.firebase || !firebase.initializeApp || !firebase.database || !window.EK_FIREBASE_CONFIG || !window.EK_FIREBASE_CONFIG.databaseURL) {
       showEntryError("โหลด Firebase ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตและไฟล์ตั้งค่า");
       return;
@@ -23,14 +21,15 @@
     $("displayEntryError").hidden = true;
     $("displayEntry").hidden = true;
     $("matchDisplay").hidden = false;
-    $("displayStatus").textContent = "ROOM " + roomCode;
+    requestAnimationFrame(fitDisplayClock);
+    $("displayStatus").textContent = "สนาม " + roomCode;
     if (!firebase.apps.length) firebase.initializeApp(window.EK_FIREBASE_CONFIG);
     db = firebase.database();
     roomRef = db.ref("rooms/" + roomCode + "/match");
     db.ref(".info/connected").on("value", (snapshot) => {
       const online = !!snapshot.val();
       $("displayStatus").classList.toggle("online", online);
-      $("displayStatus").textContent = "ROOM " + roomCode + (online ? "" : " · OFFLINE");
+      $("displayStatus").textContent = "สนาม " + roomCode + (online ? "" : " · ไม่เชื่อมต่อ");
     });
     db.ref(".info/serverTimeOffset").on("value", (snapshot) => { serverOffsetMs = Number(snapshot.val()) || 0; });
     roomRef.on("value", (snapshot) => {
@@ -40,15 +39,25 @@
     }, (error) => {
       console.error(error);
       $("displayStatus").classList.remove("online");
-      $("displayStatus").textContent = "ROOM " + roomCode + " · ERROR";
+      $("displayStatus").textContent = "สนาม " + roomCode + " · เชื่อมต่อไม่สำเร็จ";
     });
   }
 
   function nowMs() { return Date.now() + serverOffsetMs; }
   function liveRemaining(match) { if(!match.running)return Number(match.remainingMs)||0; if(match.endTs!=null&&Number.isFinite(Number(match.endTs)))return Number(match.endTs)-nowMs(); return !match.startTs?Number(match.remainingMs)||0:(Number(match.remainingMs)||0)-(nowMs()-match.startTs); }
-  function formatClock(ms) { const safe=Math.max(0,ms),whole=Math.floor(safe/1000),min=String(Math.floor(whole/60)).padStart(2,"0"),sec=String(whole%60).padStart(2,"0"),milli=String(Math.floor(safe%1000)).padStart(3,"0"); return '<span class="clock-main">'+min+":"+sec+'</span><span class="clock-ms">.'+milli+"</span>"; }
-  function paintClock(element,ms){const safe=Math.max(0,ms),whole=Math.floor(safe/1000),main=String(Math.floor(whole/60)).padStart(2,"0")+":"+String(whole%60).padStart(2,"0"),milli="."+String(Math.floor(safe%1000)).padStart(3,"0"),mainElement=element.querySelector(".clock-main"),milliElement=element.querySelector(".clock-ms");if(!mainElement||!milliElement){element.innerHTML=formatClock(ms);return;}if(mainElement.textContent!==main)mainElement.textContent=main;if(milliElement.textContent!==milli)milliElement.textContent=milli;}
-  function phaseLabel(phase) { return phase==="countdown"?"เตรียมเริ่มการแข่งขัน":phase==="running"?"กำลังแข่งขัน":phase==="timeup"?"หมดเวลา · รอกรรมการจบแมตช์":phase==="paused"?"หยุดเวลา":phase==="finished"?"จบการแข่งขัน":"พร้อมเริ่ม"; }
+  function formatClock(ms) { const safe=Math.max(0,ms),whole=Math.floor(safe/1000),min=String(Math.floor(whole/60)).padStart(2,"0"),sec=String(whole%60).padStart(2,"0"),centi=String(Math.floor((safe%1000)/10)).padStart(2,"0"); return '<span class="clock-main">'+min+":"+sec+'</span><span class="clock-ms">:'+centi+"</span>"; }
+  function paintClock(element,ms){const safe=Math.max(0,ms),whole=Math.floor(safe/1000),main=String(Math.floor(whole/60)).padStart(2,"0")+":"+String(whole%60).padStart(2,"0"),centi=":"+String(Math.floor((safe%1000)/10)).padStart(2,"0"),mainElement=element.querySelector(".clock-main"),centiElement=element.querySelector(".clock-ms");if(!mainElement||!centiElement){element.innerHTML=formatClock(ms);return;}if(mainElement.textContent!==main)mainElement.textContent=main;if(centiElement.textContent!==centi)centiElement.textContent=centi;}
+  function fitDisplayClock() {
+    if ($("matchDisplay").hidden) return;
+    const clock = $("displayClock");
+    const stage = document.querySelector(".display-stage");
+    const style = getComputedStyle(stage);
+    const availableWidth = stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 8;
+    clock.style.fontSize = "200px";
+    const measuredWidth = clock.getBoundingClientRect().width;
+    clock.style.fontSize = Math.max(32, Math.floor(Math.min(200, 200 * availableWidth / measuredWidth, window.innerHeight * .24))) + "px";
+  }
+  function phaseLabel(phase) { return phase==="countdown"?"เตรียมเริ่มการแข่งขัน":phase==="running"?"กำลังแข่งขัน":phase==="timeup"?"หมดเวลา · รอกรรมการจบแมตช์":phase==="paused"?"หยุดเวลา":phase==="finished"?"จบการแข่งขัน":"READY"; }
 
   function renderState() {
     $("displayBlueName").textContent = state.blueName || "ทีมสีน้ำเงิน";
@@ -185,10 +194,10 @@
   }
 
   $("displayRoomCode").addEventListener("input",()=>{$("displayRoomCode").value=$("displayRoomCode").value.replace(/\D/g,"").slice(0,4);});
-  $("displayRoomPassword").addEventListener("input",()=>{$("displayRoomPassword").value=$("displayRoomPassword").value.replace(/\D/g,"").slice(0,4);});
-  $("displayRoomCode").addEventListener("keydown",(event)=>{if(event.key==="Enter")$("displayRoomPassword").focus();});
-  $("displayRoomPassword").addEventListener("keydown",(event)=>{if(event.key==="Enter")enterDisplay();});
+  $("displayRoomCode").addEventListener("keydown",(event)=>{if(event.key==="Enter")enterDisplay();});
   $("enterDisplay").addEventListener("click",enterDisplay);
+  window.addEventListener("resize", fitDisplayClock);
+  document.fonts?.ready.then(fitDisplayClock);
   $("entryLogoRight").addEventListener("error",()=>{$("entryLogoRight").hidden=true;});
   $("logoRight").addEventListener("error",()=>{$("logoRight").hidden=true;});
   if($("entryLogoRight").complete&&!$("entryLogoRight").naturalWidth)$("entryLogoRight").hidden=true;
@@ -209,5 +218,5 @@
     if (audio) audio.addEventListener("error", () => { audio.dataset.failed = "true"; });
   });
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden && entered) { restartClock(); ensureAudioContext(); } });
-  if (queryRoom) $("displayRoomPassword").focus();
+  if (queryRoom) $("enterDisplay").focus();
 })();

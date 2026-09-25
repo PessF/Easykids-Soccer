@@ -1,47 +1,45 @@
 <!DOCTYPE html>
-<html lang="th" data-theme="light">
+<html lang="th">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="description" content="ระบบควบคุมเวลาและคะแนนการแข่งขันหุ่นยนต์เตะฟุตบอลแบบเรียลไทม์">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>EasyKids Robot Soccer — Control</title>
+  <title>EasyKids Soccer Robot Challenge — ระบบควบคุม</title>
+  <link rel="icon" href="favicon.ico?v=20260925" sizes="any">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260825-stable8-side-clarity">
-  <script>try{document.documentElement.dataset.theme=localStorage.getItem('ek-soccer-theme')||'light'}catch(_){}</script>
+  <link rel="stylesheet" href="css/styles.css?v=20260925-roster-preserve">
 </head>
 <body>
   <section id="roomGate" class="room-gate">
     <div class="room-card">
-      <div class="gate-mark">RS</div>
-      <p class="eyebrow-dark">EASYKIDS ROBOTICS</p>
-      <h1>Robot Soccer</h1>
-      <p class="gate-subtitle">ระบบจับเวลาและคะแนนการแข่งขันแบบเรียลไทม์</p>
-      <label class="field-label" for="roomCode">รหัสสนาม / Room Code</label>
+      <img class="gate-logo" src="logos/EasyKidsLogoB.png" alt="EasyKids Robotics">
+      <h1>Soccer Robot Challenge</h1>
+      <label class="field-label" for="roomCode">Room Code (ตัวเลข 4 หลัก)</label>
       <div class="room-input-row">
-        <input id="roomCode" value="2401" maxlength="4" inputmode="numeric" aria-label="รหัสสนาม 4 หลัก">
-        <button id="randomRoom" class="button secondary compact">สุ่ม</button>
+        <input id="roomCode" value="2401" maxlength="4" inputmode="numeric" aria-label="Room Code ตัวเลข 4 หลัก">
+        <button id="randomRoom" class="button secondary compact" type="button">Random</button>
       </div>
-      <label class="field-label" for="roomPassword">รหัสผ่านห้อง / Room Password</label>
-      <input id="roomPassword" class="password-input" type="password" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="••••" aria-label="รหัสผ่านห้อง">
-      <button id="joinRoom" class="button primary full" type="button">เข้าสู่หน้าควบคุม</button>
-      <button id="openDisplayGate" class="button ghost full">เปิดหน้าจอแสดงผล</button>
+      <p class="gate-room-hint">ใช้ Room Code เดียวกันกับจอแสดงผลของสนามนี้</p>
+      <label class="field-label" for="roomPassword">รหัสกรรมการ (Judge PIN)</label>
+      <input id="roomPassword" class="password-input" type="password" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="PIN" aria-label="รหัสกรรมการ Judge PIN">
+      <p class="gate-pin-hint">สำหรับผู้ที่ได้รับอนุญาตเท่านั้น</p>
+      <button id="joinRoom" class="button primary full" type="button">เข้าร่วมการตัดสิน</button>
     </div>
   </section>
 
   <div id="controlApp" class="control-shell" hidden>
     <header class="control-header">
       <div>
-        <p class="brand-line">EASY<span>KIDS</span> · ROBOT SOCCER</p>
-        <p class="header-caption">Competition Control Center · stable8 Side Clarity</p>
+        <p class="brand-line"><img class="header-logo" src="logos/easykids-competition.png" alt="EasyKids Robotics Competition"><span>Soccer Robot Challenge</span></p>
       </div>
-      <button id="roomPill" class="room-pill">ROOM ----</button>
+      <span id="roomPill" class="room-pill">Room Code ----</span>
       <div id="syncState" class="sync-state"><span class="sync-dot"></span><span id="syncText">กำลังเชื่อมต่อ</span></div>
       <div class="header-actions">
-        <button id="openDisplay" class="header-text-button light" aria-label="เปิดจอ Display">DISPLAY</button>
-        <button id="themeToggle" class="header-text-button light" aria-label="สลับธีม">THEME</button>
+        <button id="openDisplay" class="header-text-button light" type="button">เปิด Display</button>
       </div>
     </header>
 
@@ -49,84 +47,91 @@
       <section>
         <article class="panel timer-panel">
           <div class="panel-heading">
-            <div><span class="heading-icon">TM</span><div><h2>ตัวจับเวลา</h2><p>Match timer</p></div></div>
-            <span id="phaseChip" class="phase-chip idle">พร้อมเริ่ม</span>
+            <div><div><h2>Match Timer</h2></div></div>
+            <span id="phaseChip" class="phase-chip idle">Ready</span>
           </div>
           <div id="controlClockBox" class="control-clock">
-            <span id="controlClock" class="clock"><span class="clock-main">05:00</span><span class="clock-ms">.000</span></span>
+            <span id="controlClock" class="clock"><span class="clock-main">05:00</span><span class="clock-ms">:00</span></span>
           </div>
           <div class="timer-actions">
-            <button id="startMatch" class="button success large">นับ 3–2–1 แล้วเริ่ม</button>
-            <button id="pauseMatch" class="button warning large" hidden>หยุดเวลา</button>
-            <button id="resumeMatch" class="button success large" hidden>เดินเวลาต่อ</button>
+            <button id="startMatch" class="button success large" aria-label="Countdown 3, 2, 1 then start the match">Countdown</button>
+            <button id="pauseMatch" class="button warning large" hidden>Pause</button>
+            <button id="resumeMatch" class="button success large" hidden>Play</button>
             <button id="countdownState" class="button muted large" hidden disabled>กำลังนับถอยหลัง <b id="countdownMini">3</b></button>
-            <button id="finishMatch" class="button danger-outline" disabled>จบการแข่งขัน</button>
-            <button id="resetTimer" class="button ghost">รีเซ็ตเวลา</button>
+            <button id="finishMatch" class="button danger-outline" disabled>End Match</button>
+            <button id="resetTimer" class="button ghost">Reset</button>
           </div>
         </article>
 
         <article class="panel score-control-panel">
           <div class="panel-heading">
-            <div><span class="heading-icon">SC</span><div><h2>ควบคุมคะแนน</h2><p>คะแนนขึ้นจอ Display ทันที</p></div></div>
+            <div><div><h2>คะแนนการแข่งขัน</h2></div></div>
             <span class="live-tag"><span></span> LIVE</span>
           </div>
           <div id="scoreControls" class="score-controls">
             <div class="team-score-card red">
               <div class="team-color-line"></div>
-              <span id="redSideLabel" class="team-side-label">LEFT SIDE</span>
-              <input id="redName" class="team-name-input" value="ทีมสีแดง" maxlength="30" aria-label="ชื่อทีมสีแดง">
+              <span id="redSideLabel" class="team-side-label">ฝั่งซ้าย</span>
+              <input id="redName" type="hidden" value="ทีมสีแดง">
+              <span id="redNameLabel" class="team-name-label">ทีมสีแดง</span>
+              <select id="redTeamPicker" class="team-score-picker" aria-label="เลือกทีมสีแดง" hidden></select>
               <div id="redScore" class="score-number">0</div>
               <div class="score-buttons"><button data-score="red" data-value="-1" aria-label="ลดคะแนนทีมสีแดง">-</button><button data-score="red" data-value="1" aria-label="เพิ่มคะแนนทีมสีแดง">+</button></div>
             </div>
             <div class="versus-control">
               <span class="versus">VS</span>
-              <button id="swapTeams" class="swap-teams-button" type="button" aria-label="สลับฝั่งทีมสีแดงกับทีมสีน้ำเงิน" aria-pressed="false" title="สลับฝั่งและสีบนจอแสดงผล">⇄<small>SWAP</small></button>
+              <button id="swapTeams" class="swap-teams-button" type="button" aria-label="Swap sides" aria-pressed="false" title="Swap red and blue sides on the Display">⇄<small>SWAP</small></button>
             </div>
             <div class="team-score-card blue">
               <div class="team-color-line"></div>
-              <span id="blueSideLabel" class="team-side-label">RIGHT SIDE</span>
-              <input id="blueName" class="team-name-input" value="ทีมสีน้ำเงิน" maxlength="30" aria-label="ชื่อทีมสีน้ำเงิน">
+              <span id="blueSideLabel" class="team-side-label">ฝั่งขวา</span>
+              <input id="blueName" type="hidden" value="ทีมสีน้ำเงิน">
+              <span id="blueNameLabel" class="team-name-label">ทีมสีน้ำเงิน</span>
+              <select id="blueTeamPicker" class="team-score-picker" aria-label="เลือกทีมสีน้ำเงิน" hidden></select>
               <div id="blueScore" class="score-number">0</div>
               <div class="score-buttons"><button data-score="blue" data-value="-1" aria-label="ลดคะแนนทีมสีน้ำเงิน">-</button><button data-score="blue" data-value="1" aria-label="เพิ่มคะแนนทีมสีน้ำเงิน">+</button></div>
             </div>
           </div>
+          <p id="teamSelectionStatus" class="team-selection-status" role="status" hidden></p>
         </article>
       </section>
 
       <aside>
-        <article class="panel compact-panel">
-          <div class="panel-heading"><div><span class="heading-icon">ST</span><div><h2>ตั้งค่าการแข่งขัน</h2><p>Match settings</p></div></div></div>
+        <article class="panel compact-panel team-roster-panel">
+          <div class="panel-heading"><div><div><h2>รายชื่อทีม</h2></div></div></div>
+          <div class="panel-content team-roster-content">
+            <label class="field-label" for="teamRosterInput">หนึ่งทีมต่อหนึ่งบรรทัด</label>
+            <textarea id="teamRosterInput" class="team-roster-input" maxlength="2000" placeholder="Team Alpha&#10;Team Bravo"></textarea>
+            <button id="saveTeamRoster" class="button primary full" type="button">บันทึกรายชื่อทีม</button>
+            <button id="importTeamCsv" class="button roster-import full" type="button">นำเข้า CSV</button>
+            <input id="teamCsvFile" type="file" accept=".csv,text/csv,text/plain,application/vnd.ms-excel" hidden>
+            <!-- <p id="rosterStatus" class="roster-status" role="status">รายชื่อทีมจะบันทึกตามรหัส</p> -->
+            <div id="savedTeamList" class="saved-team-list" aria-label="ทีมที่บันทึกไว้"></div>
+          </div>
+        </article>
+
+        <article class="panel compact-panel settings-panel">
+          <div class="panel-heading"><div><div><h2>ตั้งค่าการแข่งขัน</h2></div></div></div>
           <div class="panel-content">
             <label class="field-label">ระยะเวลาแข่งขัน</label>
             <div class="duration-grid">
               <label><input id="durationMinutes" type="number" min="0" max="99" step="1" value="5"><span>นาที</span></label><b>:</b>
               <label><input id="durationSeconds" type="number" min="0" max="59" step="1" value="0"><span>วินาที</span></label>
             </div>
-            <button id="applyDuration" class="button primary full">ใช้เวลานี้</button>
+            <button id="applyDuration" class="button primary full">Set Timer</button>
             <label class="switch-row">
-              <span><span class="switch-icon">ON</span><span><strong>แสดงคะแนนบน Display</strong><small>ซ่อนหรือแสดงคะแนนทั้งสองทีม</small></span></span>
+              <span><span class="switch-icon">●</span><span><strong>แสดงคะแนนบนจอแสดงผล</strong><small>ซ่อนหรือแสดงคะแนนทั้งสองทีม</small></span></span>
               <input id="scoresVisible" type="checkbox" checked>
             </label>
-            <button id="newMatch" class="button danger-soft full">เริ่มแมตช์ใหม่และล้างคะแนน</button>
-          </div>
-        </article>
-
-        <article class="panel compact-panel">
-          <button id="assetToggle" class="accordion-button">
-            <div class="panel-heading"><div><span class="heading-icon">AU</span><div><h2>เสียงและไฟล์โลโก้</h2><p>ใช้ชื่อและตำแหน่งเดิม</p></div></div><span id="assetArrow">แสดง</span></div>
-          </button>
-          <div id="assetInfo" class="panel-content asset-info" hidden>
-            <code>logos/logo-left.png</code><code>logos/logo-right.png</code>
-            <code>sounds/countdown.mp3</code><code>sounds/whistle.mp3</code>
-            <div class="asset-actions"><button id="testCountdown" class="button ghost">ทดสอบ 3–2–1</button><button id="testWhistle" class="button ghost">ทดสอบนกหวีด</button></div>
+            <button id="newMatch" class="button danger-soft full">เริ่ม Match ใหม่และล้างคะแนน</button>
           </div>
         </article>
 
         <article class="display-preview">
-          <div class="preview-top"><span>LIVE DISPLAY</span><span>OPEN</span></div>
-          <div id="previewClock" class="preview-clock"><span class="clock"><span class="clock-main">05:00</span><span class="clock-ms">.000</span></span></div>
+          <div class="preview-top"><span>Display Preview</span><span>LIVE</span></div>
+          <div id="previewClock" class="preview-clock"><span class="clock"><span class="clock-main">05:00</span><span class="clock-ms">:00</span></span></div>
           <div id="previewScores" class="preview-scores"><span id="previewRed" class="preview-red">0</span><b>–</b><span id="previewBlue" class="preview-blue">0</span></div>
-          <button id="openDisplayPreview">เปิดแบบเต็มหน้าจอ</button>
+          <button id="openDisplayPreview">เปิด Display แบบเต็มหน้าจอ</button>
         </article>
       </aside>
     </main>
@@ -134,7 +139,7 @@
     <section class="history-wrap">
       <article class="panel history-panel">
         <div class="panel-heading">
-          <div><span class="heading-icon">HI</span><div><h2>ประวัติการแข่งขัน</h2><p>Match history · บันทึกอัตโนมัติเมื่อจบแมตช์</p></div></div>
+          <div><div><h2>ประวัติการแข่งขัน</h2></div></div>
           <div class="history-heading-actions"><span id="historyCount" class="history-count">0 รายการ</span><button id="clearHistory" class="button danger-soft compact">ล้างประวัติทั้งหมด</button></div>
         </div>
         <div id="historyList" class="history-list"><p class="history-empty">ยังไม่มีประวัติการแข่งขัน</p></div>
@@ -150,6 +155,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="js/firebase-config.js?v=20260818-stable1"></script>
   <script src="js/team-swap.js?v=20260825-stable8-side-clarity"></script>
-  <script src="js/control.js?v=20260825-stable8-side-clarity"></script>
+  <script src="js/control.js?v=20260925-roster-preserve"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const ROOM_PASSWORD = "2877";
+  const ROOM_PASSWORD = "7777";
   const APP_VERSION = "stable8-side-clarity";
   const DEFAULT_DURATION = 5 * 60 * 1000;
   const DEFAULT_MATCH = {
@@ -18,6 +18,12 @@
   let db = null;
   let roomRef = null;
   let historyRef = null;
+  let rosterRef = null;
+  let roomTeams = [];
+  let rosterLocalOnly = false;
+  let rosterPendingSync = false;
+  let rosterListenerActive = false;
+  let firebaseConnected = false;
   let roomCode = "";
   let state = Object.assign({}, DEFAULT_MATCH);
   let clockFrame = null;
@@ -27,7 +33,6 @@
   let countdownDriver = null;
   let lastCountdownNumber = null;
   let lastPhase = null;
-  let nameTimer = null;
   let toastTimer = null;
   let serverOffsetMs = 0;
   let historyQuery = null;
@@ -60,8 +65,8 @@
     if (joined) return;
     cleanRoomInput();
     const code = $("roomCode").value.trim();
-    if (!validRoom(code)) return toast("กรุณากรอกรหัสสนามเป็นตัวเลข 4 หลัก");
-    if ($("roomPassword").value !== ROOM_PASSWORD) return toast("รหัสผ่านห้องไม่ถูกต้อง");
+    if (!validRoom(code)) return toast("กรุณากรอก Room Code เป็นตัวเลข 4 หลัก");
+    if ($("roomPassword").value !== ROOM_PASSWORD) return toast("รหัสกรรมการไม่ถูกต้อง");
     $("joinRoom").disabled = true;
     $("joinRoom").textContent = "กำลังเชื่อมต่อ…";
     roomCode = code;
@@ -69,20 +74,28 @@
       initFirebase();
     } catch (error) {
       $("joinRoom").disabled = false;
-      $("joinRoom").textContent = "เข้าสู่หน้าควบคุม";
+      $("joinRoom").textContent = "เข้าร่วมการตัดสิน";
       console.error(error);
       return toast("โหลด Firebase ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตและไฟล์ตั้งค่า");
     }
     roomRef = db.ref("rooms/" + roomCode + "/match");
+    try { roomTeams = JSON.parse(localStorage.getItem("ek-soccer-roster-" + roomCode) || "[]"); } catch (_) { roomTeams = []; }
+    try { rosterPendingSync = localStorage.getItem("ek-soccer-roster-pending-" + roomCode) === "1"; } catch (_) { rosterPendingSync = false; }
+    if (!Array.isArray(roomTeams)) roomTeams = [];
+    $("teamRosterInput").value = roomTeams.join("\n");
+    renderTeamPickers();
+    renderSavedTeamList();
     historyRef = db.ref("rooms/" + roomCode + "/history");
+    rosterRef = db.ref("rooms/" + roomCode + "/roster");
     historyQuery = historyRef.orderByChild("endedAt");
     joined = true;
     $("roomGate").hidden = true;
     $("controlApp").hidden = false;
-    $("roomPill").textContent = "ROOM " + roomCode + "  ▢";
+    $("roomPill").textContent = "Room Code " + roomCode;
 
     db.ref(".info/connected").on("value", (snapshot) => {
       const online = !!snapshot.val();
+      firebaseConnected = online;
       $("syncState").classList.toggle("online", online);
       $("syncText").textContent = online ? "เชื่อมต่อแล้ว" : "ออฟไลน์ · รอเชื่อมต่อ";
     });
@@ -96,12 +109,38 @@
       renderState();
     }, firebaseError);
     historyQuery.on("value", refreshHistory, firebaseError);
+    watchRoster();
 
     roomRef.transaction((current) => current || Object.assign({}, DEFAULT_MATCH, {
       updatedAt: nowMs()
     }), (error) => {
       if (error) firebaseError(error);
     }, false);
+  }
+
+  function watchRoster() {
+    if (rosterListenerActive) return;
+    rosterListenerActive = true;
+    rosterRef.on("value", (snapshot) => {
+      if (rosterPendingSync) return;
+      if (!snapshot.exists() && roomTeams.length) {
+        $("rosterStatus").textContent = "รายชื่อทีมอยู่ในเครื่องนี้ กรุณากดบันทึกเพื่อซิงค์กับ Firebase";
+        return;
+      }
+      roomTeams = Array.isArray(snapshot.val()) ? snapshot.val().filter((name) => typeof name === "string") : [];
+      try { localStorage.setItem("ek-soccer-roster-" + roomCode, JSON.stringify(roomTeams)); } catch (_) {}
+      if (document.activeElement !== $("teamRosterInput")) $("teamRosterInput").value = roomTeams.join("\n");
+      renderTeamPickers();
+      renderSavedTeamList();
+      $("rosterStatus").textContent = "รายชื่อทีมซิงค์กับ Firebase แล้ว";
+    }, (error) => {
+      console.warn("บันทึกรายชื่อทีมบน Firebase ไม่ได้", error);
+      rosterListenerActive = false;
+      rosterLocalOnly = true;
+      $("rosterStatus").textContent = "ใช้รายชื่อทีมที่บันทึกในเครื่องนี้ กรุณาเผยแพร่กฎ Firebase ล่าสุด";
+      toast("ใช้รายชื่อทีมที่บันทึกในเครื่องนี้ กรุณาตรวจสอบกฎ Firebase");
+    });
+
   }
 
   function firebaseError(error) {
@@ -143,15 +182,15 @@
     const whole = Math.floor(safe / 1000);
     const min = String(Math.floor(whole / 60)).padStart(2, "0");
     const sec = String(whole % 60).padStart(2, "0");
-    const milli = String(Math.floor(safe % 1000)).padStart(3, "0");
-    return '<span class="clock-main">' + min + ":" + sec + '</span><span class="clock-ms">.' + milli + "</span>";
+    const centi = String(Math.floor((safe % 1000) / 10)).padStart(2, "0");
+    return '<span class="clock-main">' + min + ":" + sec + '</span><span class="clock-ms">:' + centi + "</span>";
   }
 
   function paintClock(element, ms) {
     const safe = Math.max(0, ms);
     const whole = Math.floor(safe / 1000);
     const main = String(Math.floor(whole / 60)).padStart(2, "0") + ":" + String(whole % 60).padStart(2, "0");
-    const milli = "." + String(Math.floor(safe % 1000)).padStart(3, "0");
+    const milli = ":" + String(Math.floor((safe % 1000) / 10)).padStart(2, "0");
     const mainElement = element.querySelector(".clock-main");
     const milliElement = element.querySelector(".clock-ms");
     if (!mainElement || !milliElement) {
@@ -171,8 +210,9 @@
   }
 
   function renderState() {
-    if (document.activeElement !== $("blueName")) $("blueName").value = state.blueName || "";
-    if (document.activeElement !== $("redName")) $("redName").value = state.redName || "";
+    $("blueName").value = state.blueName || "ทีมสีน้ำเงิน";
+    $("redName").value = state.redName || "ทีมสีแดง";
+    renderTeamPickers();
     $("blueScore").textContent = Number(state.blueScore) || 0;
     $("redScore").textContent = Number(state.redScore) || 0;
     $("previewBlue").textContent = Number(state.blueScore) || 0;
@@ -182,9 +222,9 @@
     $("scoreControls").classList.toggle("sides-swapped", sidesSwapped);
     $("previewScores").classList.toggle("sides-swapped", sidesSwapped);
     $("swapTeams").setAttribute("aria-pressed", String(sidesSwapped));
-    $("redSideLabel").textContent = sidesSwapped ? "RIGHT SIDE" : "LEFT SIDE";
-    $("blueSideLabel").textContent = sidesSwapped ? "LEFT SIDE" : "RIGHT SIDE";
-    $("swapTeams").title = sidesSwapped ? "สลับกลับ: สีแดงซ้าย · สีน้ำเงินขวา" : "สลับฝั่ง: สีน้ำเงินซ้าย · สีแดงขวา";
+    $("redSideLabel").textContent = sidesSwapped ? "ฝั่งขวา" : "ฝั่งซ้าย";
+    $("blueSideLabel").textContent = sidesSwapped ? "ฝั่งซ้าย" : "ฝั่งขวา";
+    $("swapTeams").title = sidesSwapped ? "Swap back: red left, blue right" : "Swap sides: blue left, red right";
     if (lastSidesSwapped !== null && lastSidesSwapped !== sidesSwapped) animateSideSwap();
     lastSidesSwapped = sidesSwapped;
 
@@ -577,15 +617,128 @@
     sideAnimationTimer = setTimeout(() => $("scoreControls").classList.remove("side-swap-flash"), 450);
   }
 
-  function saveTeamNames() {
-    clearTimeout(nameTimer);
-    nameTimer = setTimeout(() => {
-      nameTimer = null;
-      updateMatch({
-        blueName: $("blueName").value.trim() || "ทีมสีน้ำเงิน",
-        redName: $("redName").value.trim() || "ทีมสีแดง"
+  function renderTeamPickers() {
+    ["red", "blue"].forEach((side) => {
+      const select = $(side + "TeamPicker");
+      const label = $(side + "NameLabel");
+      const fallback = side === "red" ? "ทีมสีแดง" : "ทีมสีน้ำเงิน";
+      const current = $(side + "Name").value.trim();
+      label.textContent = fallback;
+      label.hidden = roomTeams.length > 0;
+      select.hidden = roomTeams.length === 0;
+      if (!roomTeams.length) return;
+      select.replaceChildren(new Option(fallback, fallback));
+      roomTeams.forEach((name) => { if (name !== fallback) select.add(new Option(name, name)); });
+      if (current && current !== fallback && !roomTeams.includes(current)) select.add(new Option(current, current));
+      select.value = current || fallback;
+    });
+  }
+
+  function renderSavedTeamList() {
+    $("savedTeamList").replaceChildren(...roomTeams.map((name) => {
+      const item = document.createElement("span");
+      item.textContent = name;
+      return item;
+    }));
+  }
+
+  function parseTeamCsvRows(text, delimiter) {
+    const rows = [];
+    let row = [], cell = "", quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '"') {
+        if (quoted && text[i + 1] === '"') { cell += '"'; i++; }
+        else quoted = !quoted;
+      } else if (char === delimiter && !quoted) {
+        row.push(cell); cell = "";
+      } else if ((char === "\n" || char === "\r") && !quoted) {
+        if (char === "\r" && text[i + 1] === "\n") i++;
+        row.push(cell); cell = "";
+        if (row.some((value) => value.trim())) rows.push(row);
+        row = [];
+      } else cell += char;
+    }
+    if (quoted) throw new Error("รูปแบบ CSV ไม่ถูกต้อง: เครื่องหมายคำพูดไม่ครบ");
+    row.push(cell);
+    if (row.some((value) => value.trim())) rows.push(row);
+    return rows;
+  }
+
+  function teamNamesFromCsv(text) {
+    const firstLine = text.split(/\r?\n/, 1)[0] || "";
+    const delimiter = [",", "\t", ";"].sort((a, b) => firstLine.split(b).length - firstLine.split(a).length)[0];
+    const rows = parseTeamCsvRows(text, delimiter);
+    if (!rows.length) throw new Error("ไฟล์ CSV ว่างเปล่า");
+    const headers = rows[0].map((header) => header.replace(/^\uFEFF/, "").trim().toLocaleLowerCase().replace(/\s+/g, " "));
+    const accepted = ["team_name", "team name", "teamname", "ชื่อทีม", "ทีม"];
+    const teamIndex = headers.findIndex((header) => accepted.includes(header));
+    if (teamIndex < 0) throw new Error("ไม่พบคอลัมน์ชื่อทีม (team_name) ในไฟล์ CSV");
+    const seen = new Set();
+    const names = rows.slice(1).map((row) => String(row[teamIndex] || "").trim()).filter((name) => {
+      const key = name.toLocaleLowerCase();
+      if (!name || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (!names.length) throw new Error("ไม่พบรายชื่อทีมในไฟล์ CSV");
+    if (names.some((name) => name.length > 30)) throw new Error("ชื่อทีมต้องไม่เกิน 30 ตัวอักษร");
+    if (names.length > 50) throw new Error("นำเข้าได้สูงสุด 50 ทีม");
+    return names;
+  }
+
+  async function importTeamCsv(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const names = teamNamesFromCsv(await file.text());
+      $("teamRosterInput").value = names.join("\n");
+      $("rosterStatus").textContent = `นำเข้า ${names.length} ทีมแล้ว กรุณาตรวจสอบและกดบันทึกรายชื่อทีม`;
+      toast(`นำเข้า ${names.length} ทีมแล้ว กรุณากดบันทึก`);
+    } catch (error) {
+      toast(error?.message || "นำเข้า CSV ไม่สำเร็จ");
+    }
+  }
+
+  function saveTeamRoster() {
+    if (!roomCode) return;
+    const names = [...new Set($("teamRosterInput").value.split(/\r?\n/).map((name) => name.trim()).filter(Boolean))];
+    if (names.some((name) => name.length > 30)) return toast("ชื่อทีมต้องไม่เกิน 30 ตัวอักษร");
+    if (names.length > 50) return toast("บันทึกได้สูงสุด 50 ทีม");
+    roomTeams = names;
+    rosterPendingSync = true;
+    renderTeamPickers();
+    renderSavedTeamList();
+    if (!names.length) {
+      $("redName").value = "ทีมสีแดง";
+      $("blueName").value = "ทีมสีน้ำเงิน";
+      updateMatch({ redName: "ทีมสีแดง", blueName: "ทีมสีน้ำเงิน" });
+    }
+    try {
+      localStorage.setItem("ek-soccer-roster-" + roomCode, JSON.stringify(names));
+      localStorage.setItem("ek-soccer-roster-pending-" + roomCode, "1");
+    } catch (_) {}
+    if (!rosterRef || !firebaseConnected) {
+      $("rosterStatus").textContent = "บันทึกในเครื่องนี้แล้ว ยังไม่ได้ซิงค์กับ Firebase";
+      return toast("บันทึกรายชื่อทีมในเครื่องนี้แล้ว ยังไม่ได้ซิงค์กับ Firebase");
+    }
+    rosterRef.set(names.length ? names : null)
+      .then(() => {
+        const needsListener = rosterLocalOnly;
+        rosterLocalOnly = false;
+        rosterPendingSync = false;
+        try { localStorage.removeItem("ek-soccer-roster-pending-" + roomCode); } catch (_) {}
+        if (needsListener) watchRoster();
+        $("rosterStatus").textContent = "รายชื่อทีมซิงค์กับ Firebase แล้ว";
+        toast("บันทึกรายชื่อทีมแล้ว");
+      })
+      .catch((error) => {
+        console.warn("บันทึกรายชื่อทีมบน Firebase ไม่ได้", error);
+        rosterLocalOnly = true;
+        $("rosterStatus").textContent = "บันทึกในเครื่องนี้แล้ว กรุณาเผยแพร่กฎ Firebase ล่าสุด";
+        toast("บันทึกรายชื่อทีมในเครื่องนี้แล้ว กรุณาตรวจสอบกฎ Firebase");
       });
-    }, 250);
   }
 
   function newMatch() {
@@ -649,18 +802,8 @@
   $("roomPassword").addEventListener("keydown", (event) => { if (event.key === "Enter") joinRoom(); });
   $("randomRoom").addEventListener("click", () => { $("roomCode").value = String(Math.floor(1000 + Math.random() * 9000)); });
   $("joinRoom").addEventListener("click", joinRoom);
-  $("openDisplayGate").addEventListener("click", openDisplay);
   $("openDisplay").addEventListener("click", openDisplay);
   $("openDisplayPreview").addEventListener("click", openDisplay);
-  $("roomPill").addEventListener("click", () => {
-    if (!navigator.clipboard) return toast("รหัสสนาม: " + roomCode);
-    navigator.clipboard.writeText(roomCode).then(() => toast("คัดลอกรหัสสนามแล้ว")).catch(() => toast("รหัสสนาม: " + roomCode));
-  });
-  $("themeToggle").addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem("ek-soccer-theme", next); } catch (_) {}
-  });
   $("startMatch").addEventListener("click", startMatch);
   $("pauseMatch").addEventListener("click", pauseMatch);
   $("resumeMatch").addEventListener("click", resumeMatch);
@@ -675,12 +818,30 @@
     if (button) deleteHistory(button.dataset.historyDelete);
   });
   $("scoresVisible").addEventListener("change", (event) => updateMatch({ scoresVisible: event.target.checked }));
-  $("blueName").addEventListener("input", saveTeamNames);
-  $("redName").addEventListener("input", saveTeamNames);
+  $("saveTeamRoster").addEventListener("click", saveTeamRoster);
+  $("importTeamCsv").addEventListener("click", () => $("teamCsvFile").click());
+  $("teamCsvFile").addEventListener("change", importTeamCsv);
+  ["red", "blue"].forEach((side) => {
+    $(side + "TeamPicker").addEventListener("change", (event) => {
+      const previousName = state[side + "Name"] || (side === "red" ? "ทีมสีแดง" : "ทีมสีน้ำเงิน");
+      const selectedName = event.target.value;
+      $("teamSelectionStatus").hidden = false;
+      $("teamSelectionStatus").classList.remove("error");
+      $("teamSelectionStatus").textContent = "กำลังซิงค์ชื่อทีมกับ Firebase…";
+      updateMatch({ [side + "Name"]: selectedName }).then((saved) => {
+        if (saved) {
+          $("teamSelectionStatus").textContent = "ชื่อทีมซิงค์กับ Firebase แล้ว";
+        } else {
+          $(side + "Name").value = previousName;
+          event.target.value = previousName;
+          $("teamSelectionStatus").classList.add("error");
+          $("teamSelectionStatus").textContent = "ส่งชื่อทีมไปยัง Firebase ไม่สำเร็จ";
+          toast("ส่งชื่อทีมไปยัง Firebase ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อ");
+        }
+      });
+    });
+  });
   document.querySelectorAll("[data-score]").forEach((button) => button.addEventListener("click", () => adjustScore(button.dataset.score, Number(button.dataset.value))));
-  $("assetToggle").addEventListener("click", () => { $("assetInfo").hidden = !$("assetInfo").hidden; $("assetArrow").textContent = $("assetInfo").hidden ? "แสดง" : "ซ่อน"; });
-  $("testCountdown").addEventListener("click", () => playAudio("countdownAudio"));
-  $("testWhistle").addEventListener("click", () => playAudio("whistleAudio"));
   [$("countdownAudio"), $("whistleAudio")].forEach((audio) => {
     if (audio) audio.addEventListener("error", () => { audio.dataset.failed = "true"; });
   });
