@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260925-roster-preserve">
+  <link rel="stylesheet" href="css/styles.css?v=20260925-team-labels-purple">
 </head>
 <body>
   <section id="roomGate" class="room-gate">
@@ -54,7 +54,7 @@
             <span id="controlClock" class="clock"><span class="clock-main">05:00</span><span class="clock-ms">:00</span></span>
           </div>
           <div class="timer-actions">
-            <button id="startMatch" class="button success large" aria-label="Countdown 3, 2, 1 then start the match">Countdown</button>
+            <button id="startMatch" class="button success large" aria-label="เริ่มการแข่งขัน โดยนับถอยหลัง 3 2 1 ก่อนเริ่มเวลา">เริ่มแข่งขัน (3–2–1)</button>
             <button id="pauseMatch" class="button warning large" hidden>Pause</button>
             <button id="resumeMatch" class="button success large" hidden>Play</button>
             <button id="countdownState" class="button muted large" hidden disabled>กำลังนับถอยหลัง <b id="countdownMini">3</b></button>
@@ -72,11 +72,11 @@
             <div class="team-score-card red">
               <div class="team-color-line"></div>
               <span id="redSideLabel" class="team-side-label">ฝั่งซ้าย</span>
-              <input id="redName" type="hidden" value="ทีมสีแดง">
-              <span id="redNameLabel" class="team-name-label">ทีมสีแดง</span>
-              <select id="redTeamPicker" class="team-score-picker" aria-label="เลือกทีมสีแดง" hidden></select>
+              <input id="redName" type="hidden" value="Red Team">
+              <span id="redNameLabel" class="team-name-label">Red Team</span>
+              <select id="redTeamPicker" class="team-score-picker" aria-label="Select Red Team" hidden></select>
               <div id="redScore" class="score-number">0</div>
-              <div class="score-buttons"><button data-score="red" data-value="-1" aria-label="ลดคะแนนทีมสีแดง">-</button><button data-score="red" data-value="1" aria-label="เพิ่มคะแนนทีมสีแดง">+</button></div>
+              <div class="score-buttons"><button data-score="red" data-value="-1" aria-label="Decrease Red Team score">-</button><button data-score="red" data-value="1" aria-label="Increase Red Team score">+</button></div>
             </div>
             <div class="versus-control">
               <span class="versus">VS</span>
@@ -85,11 +85,11 @@
             <div class="team-score-card blue">
               <div class="team-color-line"></div>
               <span id="blueSideLabel" class="team-side-label">ฝั่งขวา</span>
-              <input id="blueName" type="hidden" value="ทีมสีน้ำเงิน">
-              <span id="blueNameLabel" class="team-name-label">ทีมสีน้ำเงิน</span>
-              <select id="blueTeamPicker" class="team-score-picker" aria-label="เลือกทีมสีน้ำเงิน" hidden></select>
+              <input id="blueName" type="hidden" value="Blue Team">
+              <span id="blueNameLabel" class="team-name-label">Blue Team</span>
+              <select id="blueTeamPicker" class="team-score-picker" aria-label="Select Blue Team" hidden></select>
               <div id="blueScore" class="score-number">0</div>
-              <div class="score-buttons"><button data-score="blue" data-value="-1" aria-label="ลดคะแนนทีมสีน้ำเงิน">-</button><button data-score="blue" data-value="1" aria-label="เพิ่มคะแนนทีมสีน้ำเงิน">+</button></div>
+              <div class="score-buttons"><button data-score="blue" data-value="-1" aria-label="Decrease Blue Team score">-</button><button data-score="blue" data-value="1" aria-label="Increase Blue Team score">+</button></div>
             </div>
           </div>
           <p id="teamSelectionStatus" class="team-selection-status" role="status" hidden></p>
@@ -123,16 +123,10 @@
               <span><span class="switch-icon">●</span><span><strong>แสดงคะแนนบนจอแสดงผล</strong><small>ซ่อนหรือแสดงคะแนนทั้งสองทีม</small></span></span>
               <input id="scoresVisible" type="checkbox" checked>
             </label>
-            <button id="newMatch" class="button danger-soft full">เริ่ม Match ใหม่และล้างคะแนน</button>
+            <button id="newMatch" class="button danger-soft full">New Match &amp; Reset Scores</button>
           </div>
         </article>
 
-        <article class="display-preview">
-          <div class="preview-top"><span>Display Preview</span><span>LIVE</span></div>
-          <div id="previewClock" class="preview-clock"><span class="clock"><span class="clock-main">05:00</span><span class="clock-ms">:00</span></span></div>
-          <div id="previewScores" class="preview-scores"><span id="previewRed" class="preview-red">0</span><b>–</b><span id="previewBlue" class="preview-blue">0</span></div>
-          <button id="openDisplayPreview">เปิด Display แบบเต็มหน้าจอ</button>
-        </article>
       </aside>
     </main>
 
@@ -147,14 +141,13 @@
     </section>
   </div>
 
-  <audio id="countdownAudio" src="sounds/countdown.mp3" preload="auto"></audio>
-  <audio id="whistleAudio" src="sounds/whistle.mp3" preload="auto"></audio>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="js/firebase-config.js?v=20260818-stable1"></script>
   <script src="js/team-swap.js?v=20260825-stable8-side-clarity"></script>
-  <script src="js/control.js?v=20260925-roster-preserve"></script>
+  <script src="js/score-goal.js?v=20260925-goal-pause"></script>
+  <script src="js/control.js?v=20260925-team-labels-purple"></script>
 </body>
 </html>

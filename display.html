@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+Thai:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260925-compact-display-header">
+  <link rel="stylesheet" href="css/styles.css?v=20260925-team-card-tints">
 </head>
 <body class="display-body">
   <section id="displayEntry" class="display-entry">
@@ -35,13 +35,13 @@
       <div id="displayTimerBox" class="display-timer"><span id="displayClock" class="clock clock-large"><span class="clock-main">05:00</span><span class="clock-ms">:00</span></span></div>
       <div class="match-rule"><span></span><b>SOCCER ROBOT CHALLENGE</b><span></span></div>
       <div id="displayScoreboard" class="display-scoreboard">
-        <div id="redTeamBox" class="display-team red"><span class="winner-label" hidden>ชนะ</span><span id="displayRedSide" class="display-side-label">LEFT SIDE</span><div class="team-accent"></div><p id="displayRedName">ทีมสีแดง</p><strong id="displayRedScore">0</strong></div>
+        <div id="redTeamBox" class="display-team red"><span class="winner-label" hidden>ชนะ</span><span id="displayRedSide" class="display-side-label">LEFT SIDE</span><div class="team-accent"></div><p id="displayRedName">Red Team</p><strong id="displayRedScore">0</strong></div>
         <div class="display-versus"><span>VS</span><small>สด</small></div>
-        <div id="blueTeamBox" class="display-team blue"><span class="winner-label" hidden>ชนะ</span><span id="displayBlueSide" class="display-side-label">RIGHT SIDE</span><div class="team-accent"></div><p id="displayBlueName">ทีมสีน้ำเงิน</p><strong id="displayBlueScore">0</strong></div>
+        <div id="blueTeamBox" class="display-team blue"><span class="winner-label" hidden>ชนะ</span><span id="displayBlueSide" class="display-side-label">RIGHT SIDE</span><div class="team-accent"></div><p id="displayBlueName">Blue Team</p><strong id="displayBlueScore">0</strong></div>
       </div>
     </section>
     <footer class="display-footer"><span>EASYKIDS ROBOTICS COMPETITION</span><span>SOCCER ROBOT CHALLENGE · ผลการแข่งขันปัจจุบัน</span></footer>
-    <div class="display-tools"><button id="fullscreenButton" aria-label="เต็มหน้าจอ">FULL</button><button id="displaySwapTeams" aria-label="สลับฝั่งทีมสีแดงกับทีมสีน้ำเงิน" aria-pressed="false" title="สลับฝั่งและสีบนจอแสดงผล">SWAP</button><button id="displaySettingsButton" aria-label="ตั้งค่าเสียง">SET</button></div>
+    <div class="display-tools"><button id="fullscreenButton" aria-label="เต็มหน้าจอ">FULL</button><button id="displaySwapTeams" aria-label="Swap Red Team and Blue Team sides" aria-pressed="false" title="สลับฝั่งและสีบนจอแสดงผล">SWAP</button><button id="displaySettingsButton" aria-label="ตั้งค่าเสียง">SET</button></div>
     <div id="displaySettings" class="display-settings" hidden><button id="closeDisplaySettings" class="close-settings">ปิด</button><h2>เสียงการแข่งขัน</h2><p>ระบบใช้ไฟล์เสียงชื่อเดิมจากโฟลเดอร์ <code>sounds/</code></p><button id="displayTestCountdown">ทดสอบเสียง 3–2–1</button><button id="displayTestWhistle">ทดสอบเสียงนกหวีด</button></div>
     <div id="countdownOverlay" class="countdown-overlay" hidden><p>เตรียมพร้อม</p><strong id="countdownNumber">3</strong><span>SOCCER ROBOT CHALLENGE</span></div>
     <div id="pausedRibbon" class="paused-ribbon" hidden>MATCH PAUSED · หยุดเวลา</div>
@@ -50,10 +50,11 @@
 
   <audio id="displayCountdownAudio" src="sounds/countdown.mp3" preload="auto"></audio>
   <audio id="displayWhistleAudio" src="sounds/whistle.mp3" preload="auto"></audio>
+  <audio id="displayCheerAudio" src="sounds/crowd-cheering.mp3" preload="auto"></audio>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="js/firebase-config.js?v=20260818-stable1"></script>
   <script src="js/team-swap.js?v=20260825-stable8-side-clarity"></script>
-  <script src="js/display.js?v=20260925-ringmaster-clock"></script>
+  <script src="js/display.js?v=20260925-team-labels-purple"></script>
 </body>
 </html>

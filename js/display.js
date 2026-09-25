@@ -1,8 +1,8 @@
 (function () {
   "use strict";
-  const DEFAULT_MATCH = { blueName:"ทีมสีน้ำเงิน", redName:"ทีมสีแดง", blueScore:0, redScore:0, durationMs:300000, remainingMs:300000, running:false, startTs:null, endTs:null, phase:"idle", countdownValue:null, countdownEndTs:null, scoresVisible:true, matchId:null, historyEntryId:null, startedAt:null, finishReason:null, historySaved:false, sidesSwapped:false };
+  const DEFAULT_MATCH = { blueName:"Blue Team", redName:"Red Team", blueScore:0, redScore:0, durationMs:300000, remainingMs:300000, running:false, startTs:null, endTs:null, phase:"idle", countdownValue:null, countdownEndTs:null, scoresVisible:true, matchId:null, historyEntryId:null, startedAt:null, finishReason:null, historySaved:false, sidesSwapped:false };
   const $ = (id) => document.getElementById(id);
-  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, clockInterval = null, countdownDriver = null, lastCountdownNumber = null, lastPhase = null, serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null, lastSidesSwapped = null, sideAnimationTimer = null, displayToastTimer = null;
+  let db = null, roomRef = null, roomCode = "", state = Object.assign({}, DEFAULT_MATCH), clockFrame = null, clockInterval = null, countdownDriver = null, lastCountdownNumber = null, lastPhase = null, lastRenderedScores = null, serverOffsetMs = 0, timeUpPending = false, entered = false, audioContext = null, lastSidesSwapped = null, sideAnimationTimer = null, displayToastTimer = null;
 
   const queryRoom = new URLSearchParams(location.search).get("room") || "";
   $("displayRoomCode").value = queryRoom.replace(/\D/g, "").slice(0, 4);
@@ -35,6 +35,8 @@
     roomRef.on("value", (snapshot) => {
       if (!snapshot.exists()) return;
       state = Object.assign({}, DEFAULT_MATCH, snapshot.val() || {});
+      if (state.redName === "ทีมสีแดง") state.redName = "Red Team";
+      if (state.blueName === "ทีมสีน้ำเงิน") state.blueName = "Blue Team";
       renderState();
     }, (error) => {
       console.error(error);
@@ -60,8 +62,11 @@
   function phaseLabel(phase) { return phase==="countdown"?"เตรียมเริ่มการแข่งขัน":phase==="running"?"กำลังแข่งขัน":phase==="timeup"?"หมดเวลา · รอกรรมการจบแมตช์":phase==="paused"?"หยุดเวลา":phase==="finished"?"จบการแข่งขัน":"READY"; }
 
   function renderState() {
-    $("displayBlueName").textContent = state.blueName || "ทีมสีน้ำเงิน";
-    $("displayRedName").textContent = state.redName || "ทีมสีแดง";
+    if (lastPhase === "running" && state.phase === "paused" && lastRenderedScores &&
+        (Number(state.redScore) > lastRenderedScores.red || Number(state.blueScore) > lastRenderedScores.blue)) playCheer();
+    lastRenderedScores = { red: Number(state.redScore) || 0, blue: Number(state.blueScore) || 0 };
+    $("displayBlueName").textContent = state.blueName || "Blue Team";
+    $("displayRedName").textContent = state.redName || "Red Team";
     setScore("displayBlueScore", Number(state.blueScore)||0);
     setScore("displayRedScore", Number(state.redScore)||0);
     $("displayScoreboard").hidden = state.scoresVisible === false;
@@ -83,6 +88,7 @@
       if (lastPhase !== "countdown") playAudio("displayCountdownAudio");
     }
     if (state.phase === "running" && lastPhase === "countdown") playAudio("displayWhistleAudio");
+    if (state.phase === "running" && lastPhase === "paused") playAudio("displayWhistleAudio");
     if (state.phase === "timeup" && lastPhase !== null && lastPhase !== "timeup") playAudio("displayWhistleAudio");
     lastPhase = state.phase;
     const blueScore = Number(state.blueScore) || 0;
@@ -150,6 +156,13 @@
     const audio=$(id), kind=/whistle/i.test(id)?"whistle":"countdown";
     if(!audio||audio.dataset.failed==="true")return synthAudio(kind);
     audio.pause(); audio.currentTime=0; audio.play().catch(()=>synthAudio(kind));
+  }
+  function playCheer() {
+    const audio = $("displayCheerAudio");
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
   }
 
   function swapTeams() {

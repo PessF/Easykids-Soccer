@@ -5,7 +5,7 @@
   const APP_VERSION = "stable8-side-clarity";
   const DEFAULT_DURATION = 5 * 60 * 1000;
   const DEFAULT_MATCH = {
-    blueName: "ทีมสีน้ำเงิน", redName: "ทีมสีแดง",
+    blueName: "Blue Team", redName: "Red Team",
     blueScore: 0, redScore: 0,
     durationMs: DEFAULT_DURATION, remainingMs: DEFAULT_DURATION,
     running: false, startTs: null, endTs: null, phase: "idle",
@@ -32,13 +32,11 @@
   let finishingMatch = false;
   let countdownDriver = null;
   let lastCountdownNumber = null;
-  let lastPhase = null;
   let toastTimer = null;
   let serverOffsetMs = 0;
   let historyQuery = null;
   let joined = false;
   let lastFirebaseErrorAt = 0;
-  let audioContext = null;
   let lastSidesSwapped = null;
   let sideAnimationTimer = null;
 
@@ -106,6 +104,8 @@
     roomRef.on("value", (snapshot) => {
       if (!snapshot.exists()) return;
       state = Object.assign({}, DEFAULT_MATCH, snapshot.val() || {});
+      if (state.redName === "ทีมสีแดง") state.redName = "Red Team";
+      if (state.blueName === "ทีมสีน้ำเงิน") state.blueName = "Blue Team";
       renderState();
     }, firebaseError);
     historyQuery.on("value", refreshHistory, firebaseError);
@@ -210,17 +210,14 @@
   }
 
   function renderState() {
-    $("blueName").value = state.blueName || "ทีมสีน้ำเงิน";
-    $("redName").value = state.redName || "ทีมสีแดง";
+    $("blueName").value = state.blueName || "Blue Team";
+    $("redName").value = state.redName || "Red Team";
     renderTeamPickers();
     $("blueScore").textContent = Number(state.blueScore) || 0;
     $("redScore").textContent = Number(state.redScore) || 0;
-    $("previewBlue").textContent = Number(state.blueScore) || 0;
-    $("previewRed").textContent = Number(state.redScore) || 0;
     $("scoresVisible").checked = state.scoresVisible !== false;
     const sidesSwapped = state.sidesSwapped === true;
     $("scoreControls").classList.toggle("sides-swapped", sidesSwapped);
-    $("previewScores").classList.toggle("sides-swapped", sidesSwapped);
     $("swapTeams").setAttribute("aria-pressed", String(sidesSwapped));
     $("redSideLabel").textContent = sidesSwapped ? "ฝั่งขวา" : "ฝั่งซ้าย";
     $("blueSideLabel").textContent = sidesSwapped ? "ฝั่งซ้าย" : "ฝั่งขวา";
@@ -234,10 +231,6 @@
     }
 
     const phase = state.phase || "idle";
-    if (phase === "timeup" && lastPhase !== null && lastPhase !== "timeup") {
-      playAudio("whistleAudio");
-    }
-    lastPhase = phase;
     $("phaseChip").className = "phase-chip " + phase;
     $("phaseChip").textContent = phaseLabel(phase);
     $("startMatch").hidden = !(phase === "idle" || phase === "finished");
@@ -259,7 +252,6 @@
     const evaluate = () => {
       const remaining = liveRemaining(state);
       paintClock($("controlClock"), remaining);
-      paintClock($("previewClock").querySelector(".clock"), remaining);
       $("controlClockBox").classList.toggle("danger", remaining > 0 && remaining <= 10000);
       if (state.running && remaining <= 0 && !timeUpPending) {
         timeUpPending = true;
@@ -334,10 +326,7 @@
       current.countdownEndTs = null;
       current.updatedAt = transitionNow;
       return current;
-    }, (error, committed) => {
-      if (error) return firebaseError(error);
-      if (committed) playAudio("whistleAudio");
-    }, false);
+    }, (error) => { if (error) firebaseError(error); }, false);
   }
 
   function stopCountdownDriver() {
@@ -352,7 +341,6 @@
     const startedAt = nowMs();
     const newMatchId = historyRef ? historyRef.push().key : null;
     if (!newMatchId) return toast("ไม่สามารถสร้างรหัสแมตช์ได้ กรุณาตรวจสอบการเชื่อมต่อ");
-    playAudio("countdownAudio");
     roomRef.transaction((current) => {
       const match = Object.assign({}, DEFAULT_MATCH, current || {});
       if (!["idle", "finished"].includes(match.phase)) return;
@@ -503,8 +491,8 @@
     return {
       historyId: historyId,
       matchId: String(match.matchId || historyId),
-      blueName: match.blueName || "ทีมสีน้ำเงิน",
-      redName: match.redName || "ทีมสีแดง",
+      blueName: match.blueName || "Blue Team",
+      redName: match.redName || "Red Team",
       blueScore: Number(match.blueScore) || 0,
       redScore: Number(match.redScore) || 0,
       durationMs: durationMs,
@@ -562,8 +550,8 @@
       const endedAt = Number(value.endedAt) || 0;
       const date = endedAt ? new Date(endedAt).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : "ไม่ระบุเวลา";
       const played = formatHistoryDuration(Number(value.playedMs) || Number(value.durationMs) || 0);
-      const blueName = escapeHtml(value.blueName || "ทีมสีน้ำเงิน");
-      const redName = escapeHtml(value.redName || "ทีมสีแดง");
+      const blueName = escapeHtml(value.blueName === "ทีมสีน้ำเงิน" ? "Blue Team" : (value.blueName || "Blue Team"));
+      const redName = escapeHtml(value.redName === "ทีมสีแดง" ? "Red Team" : (value.redName || "Red Team"));
       return '<article class="history-item"><div class="history-meta"><span>' + date + '</span><small>' + (value.finishReason === "time" ? "หมดเวลา" : "จบโดยกรรมการ") + ' · ใช้เวลา ' + played + '</small></div><div class="history-result"><span class="history-team red">' + redName + '</span><strong>' + (Number(value.redScore) || 0) + '<i>–</i>' + (Number(value.blueScore) || 0) + '</strong><span class="history-team blue">' + blueName + '</span></div><button class="history-delete" data-history-delete="' + escapeHtml(key) + '" aria-label="ลบประวัติแมตช์นี้">ลบ</button></article>';
     }).join("");
   }
@@ -589,7 +577,7 @@
 
   function adjustScore(side, amount) {
     if (!roomRef) return;
-    roomRef.child(side + "Score").transaction((value) => Math.min(999, Math.max(0, (Number(value) || 0) + amount)), (error) => {
+    roomRef.transaction((current) => window.EKScoreGoal.adjust(current, side, amount, nowMs()), (error) => {
       if (error) firebaseError(error);
     }, false);
   }
@@ -621,7 +609,7 @@
     ["red", "blue"].forEach((side) => {
       const select = $(side + "TeamPicker");
       const label = $(side + "NameLabel");
-      const fallback = side === "red" ? "ทีมสีแดง" : "ทีมสีน้ำเงิน";
+      const fallback = side === "red" ? "Red Team" : "Blue Team";
       const current = $(side + "Name").value.trim();
       label.textContent = fallback;
       label.hidden = roomTeams.length > 0;
@@ -711,9 +699,9 @@
     renderTeamPickers();
     renderSavedTeamList();
     if (!names.length) {
-      $("redName").value = "ทีมสีแดง";
-      $("blueName").value = "ทีมสีน้ำเงิน";
-      updateMatch({ redName: "ทีมสีแดง", blueName: "ทีมสีน้ำเงิน" });
+      $("redName").value = "Red Team";
+      $("blueName").value = "Blue Team";
+      updateMatch({ redName: "Red Team", blueName: "Blue Team" });
     }
     try {
       localStorage.setItem("ek-soccer-roster-" + roomCode, JSON.stringify(names));
@@ -757,43 +745,6 @@
   }
 
   function openDisplay() { window.open(displayUrl(), "_blank"); }
-  function ensureAudioContext() {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return null;
-    if (!audioContext) audioContext = new AudioContextClass();
-    if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
-    return audioContext;
-  }
-
-  function synthAudio(kind) {
-    const context = ensureAudioContext();
-    if (!context) return;
-    const notes = kind === "whistle"
-      ? [{ at: 0, hz: 1500, length: .55 }, { at: .08, hz: 1850, length: .48 }]
-      : [{ at: 0, hz: 660, length: .14 }, { at: .55, hz: 660, length: .14 }, { at: 1.1, hz: 880, length: .24 }];
-    notes.forEach((note) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = kind === "whistle" ? "sine" : "square";
-      oscillator.frequency.setValueAtTime(note.hz, context.currentTime + note.at);
-      gain.gain.setValueAtTime(.0001, context.currentTime + note.at);
-      gain.gain.exponentialRampToValueAtTime(.13, context.currentTime + note.at + .01);
-      gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + note.at + note.length);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start(context.currentTime + note.at);
-      oscillator.stop(context.currentTime + note.at + note.length + .02);
-    });
-  }
-
-  function playAudio(id) {
-    ensureAudioContext();
-    const audio = $(id);
-    const kind = /whistle/i.test(id) ? "whistle" : "countdown";
-    if (!audio || audio.dataset.failed === "true") return synthAudio(kind);
-    audio.pause();
-    audio.currentTime = 0;
-    audio.play().catch(() => synthAudio(kind));
-  }
   function toast(text) { clearTimeout(toastTimer); $("toast").textContent = text; $("toast").hidden = false; toastTimer = setTimeout(() => { $("toast").hidden = true; }, 2600); }
 
   $("roomCode").addEventListener("input", cleanRoomInput);
@@ -803,7 +754,6 @@
   $("randomRoom").addEventListener("click", () => { $("roomCode").value = String(Math.floor(1000 + Math.random() * 9000)); });
   $("joinRoom").addEventListener("click", joinRoom);
   $("openDisplay").addEventListener("click", openDisplay);
-  $("openDisplayPreview").addEventListener("click", openDisplay);
   $("startMatch").addEventListener("click", startMatch);
   $("pauseMatch").addEventListener("click", pauseMatch);
   $("resumeMatch").addEventListener("click", resumeMatch);
@@ -823,7 +773,7 @@
   $("teamCsvFile").addEventListener("change", importTeamCsv);
   ["red", "blue"].forEach((side) => {
     $(side + "TeamPicker").addEventListener("change", (event) => {
-      const previousName = state[side + "Name"] || (side === "red" ? "ทีมสีแดง" : "ทีมสีน้ำเงิน");
+      const previousName = state[side + "Name"] || (side === "red" ? "Red Team" : "Blue Team");
       const selectedName = event.target.value;
       $("teamSelectionStatus").hidden = false;
       $("teamSelectionStatus").classList.remove("error");
@@ -842,8 +792,5 @@
     });
   });
   document.querySelectorAll("[data-score]").forEach((button) => button.addEventListener("click", () => adjustScore(button.dataset.score, Number(button.dataset.value))));
-  [$("countdownAudio"), $("whistleAudio")].forEach((audio) => {
-    if (audio) audio.addEventListener("error", () => { audio.dataset.failed = "true"; });
-  });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && joined) { restartClock(); ensureAudioContext(); } });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && joined) restartClock(); });
 })();
